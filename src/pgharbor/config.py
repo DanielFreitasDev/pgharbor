@@ -207,6 +207,19 @@ class ConnectionConfig(_Model):
     params: dict[str, str] = Field(default_factory=dict)
     role: str | None = Field(default=None, description="SET ROLE to this role in every transaction")
 
+    @field_validator("params", mode="before")
+    @classmethod
+    def _params_as_text(cls, value: Any) -> Any:
+        # libpq takes every parameter as text; TOML authors naturally write keepalives = 1.
+        if isinstance(value, dict):
+            return {
+                k: (str(int(v)) if isinstance(v, bool) else str(v))
+                if isinstance(v, (bool, int, float))
+                else v
+                for k, v in value.items()
+            }
+        return value
+
     # ---- what is allowed
     access: Access = Access.READ_ONLY
     approval: Approval | None = None

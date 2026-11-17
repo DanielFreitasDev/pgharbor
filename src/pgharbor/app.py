@@ -176,8 +176,15 @@ def tool(
         async def run(*args: Any, **kwargs: Any) -> str:
             app = get_app()
             connection = kwargs.get("connection")
+            if connection is None:
+                # The log names the connection that was actually used, default included.
+                resolved = _profile_or_none(app, None)
+                connection = resolved.name if resolved else None
             watch = Stopwatch()
             sql = kwargs.get("sql") if isinstance(kwargs.get("sql"), str) else None
+            if sql is None:
+                sql = getattr(function, "__pgharbor_sql__", None)
+            params = _audit_params(function, kwargs)
             try:
                 result = await function(*args, **kwargs)
             except Rejected as exc:
@@ -187,6 +194,7 @@ def tool(
                     outcome="refused",
                     rule=exc.rule,
                     sql=sql,
+                    params=params,
                     elapsed_ms=watch.ms,
                     detail=exc.reason,
                 )
@@ -197,6 +205,7 @@ def tool(
                     connection=connection,
                     outcome="needs-approval",
                     sql=sql,
+                    params=params,
                     elapsed_ms=watch.ms,
                 )
                 raise ToolError(str(exc)) from None
@@ -206,6 +215,7 @@ def tool(
                     connection=connection,
                     outcome="error",
                     sql=sql,
+                    params=params,
                     elapsed_ms=watch.ms,
                     detail=str(exc),
                 )
@@ -217,6 +227,7 @@ def tool(
                     connection=connection,
                     outcome="error",
                     sql=sql,
+                    params=params,
                     elapsed_ms=watch.ms,
                     detail=message,
                 )
@@ -230,6 +241,7 @@ def tool(
                     connection=connection,
                     outcome="bug",
                     sql=sql,
+                    params=params,
                     elapsed_ms=watch.ms,
                     detail=repr(exc),
                 )
@@ -245,7 +257,12 @@ def tool(
                     "rows, a narrower filter or a smaller limit.]"
                 )
             app.audit.record(
-                tool=name, connection=connection, outcome="ok", sql=sql, elapsed_ms=watch.ms
+                tool=name,
+                connection=connection,
+                outcome="ok",
+                sql=sql,
+                params=params,
+                elapsed_ms=watch.ms,
             )
             return text
 
@@ -263,6 +280,15 @@ def tool(
         return run
 
     return decorate
+
+
+def _audit_params(function: Callable[..., Any], kwargs: dict[str, Any]) -> Any:
+    """What the audit log calls the parameters of a call (written only with ``log_params``):
+    the bound values of a statement or, for a custom tool, its arguments."""
+    if getattr(function, "__pgharbor_sql__", None) is not None:
+        return {k: v for k, v in kwargs.items() if k != "connection"} or None
+    params = kwargs.get("params")
+    return params if isinstance(params, (list, tuple)) else None
 
 
 def _profile_or_none(app: App, connection: str | None) -> ConnectionConfig | None:

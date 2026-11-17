@@ -202,6 +202,21 @@ def test_readable_file_with_a_password_gets_a_warning(tmp_path: Path) -> None:
     assert load_config(file).warnings == ()
 
 
+def test_connection_parameters_may_be_written_as_numbers() -> None:
+    connection = ConnectionConfig.model_validate(
+        {
+            "name": "a",
+            "host": "db",
+            "params": {"keepalives": 1, "keepalives_idle": 30, "sslmode": "require"},
+        }
+    )
+    assert connection.params == {
+        "keepalives": "1",
+        "keepalives_idle": "30",
+        "sslmode": "require",
+    }
+
+
 def test_several_connections_need_an_explicit_choice() -> None:
     config = Config.model_validate({"connections": {"a": {"name": "a"}, "b": {"name": "b"}}})
     with pytest.raises(ConfigError, match="Several connections"):

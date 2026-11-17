@@ -84,6 +84,7 @@ def test_check_with_invalid_configuration(tmp_path: Path) -> None:
 def test_tools_lists_what_the_configuration_exposes(one_server: Server, tmp_path: Path) -> None:
     config = write_config_file(tmp_path / "config.toml", one_server)
     listing = run("--config", str(config), "tools").stdout
+    assert run("tools", "--config", str(config)).stdout == listing  # either position works
     assert "pg_query" in listing
     assert "pg_execute" in listing
     assert "(writes)" in listing

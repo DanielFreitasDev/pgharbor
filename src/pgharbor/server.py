@@ -208,6 +208,7 @@ def _custom_function(custom: CustomTool, name: str) -> Any:
             described.append(f"- `{param.name}`: {param.description}")
     run.__name__ = name
     run.__qualname__ = name
+    run.__pgharbor_sql__ = custom.sql  # type: ignore[attr-defined]  # for the audit log
     run.__doc__ = custom.description.strip() + (
         "\n\nParameters:\n" + "\n".join(described) if described else ""
     )

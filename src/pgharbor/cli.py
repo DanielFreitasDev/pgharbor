@@ -71,12 +71,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--version", action="version", version=f"pgharbor {__version__}")
     parser.add_argument("--config", metavar="PATH", help="configuration file to use")
+    # The same option after the subcommand (pgharbor check --config FILE): SUPPRESS keeps a
+    # value given before the subcommand when it is not repeated after it.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--config", metavar="PATH", default=argparse.SUPPRESS, help="configuration file to use"
+    )
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("serve", help="run the MCP server on stdio (default)")
-    init = sub.add_parser("init", help="write a starter configuration file")
+    sub.add_parser("serve", parents=[common], help="run the MCP server on stdio (default)")
+    init = sub.add_parser("init", parents=[common], help="write a starter configuration file")
     init.add_argument("--force", action="store_true", help="overwrite an existing file")
     check = sub.add_parser(
         "check",
+        parents=[common],
         help="validate the configuration and test the connections",
         description="Validate the configuration file and try the connections. Connections "
         "that need approval (production) are only tried when named or with --all.",
@@ -92,9 +99,10 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also test connections that need approval, such as production",
     )
-    sub.add_parser("tools", help="list the tools this configuration exposes")
+    sub.add_parser("tools", parents=[common], help="list the tools this configuration exposes")
     sub.add_parser("config-path", help="print the default configuration file path")
     args = parser.parse_args(argv)
+    _use_selector_loop_on_windows()
 
     if args.config:
         os.environ["PGHARBOR_CONFIG"] = args.config
@@ -114,6 +122,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"pgharbor: {exc}", file=sys.stderr)
         return 2
     return 0
+
+
+def _use_selector_loop_on_windows() -> None:
+    """psycopg's async connections need a selector event loop; Windows defaults to the
+    proactor one, on which every connection attempt fails."""
+    if sys.platform != "win32":
+        return
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)  # the policy API, from 3.14 on
+        asyncio.set_event_loop_policy(
+            asyncio.WindowsSelectorEventLoopPolicy()  # type: ignore[attr-defined,unused-ignore]
+        )
 
 
 def _serve() -> int:

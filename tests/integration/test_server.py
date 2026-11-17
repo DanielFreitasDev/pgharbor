@@ -188,6 +188,39 @@ async def test_custom_tools_from_the_configuration(one_server: Server) -> None:
         set_app(None)
 
 
+async def test_custom_tools_are_audited_with_their_statement(
+    one_server: Server, tmp_path: Path
+) -> None:
+    log = tmp_path / "audit.jsonl"
+    config = Config.model_validate(
+        {
+            "connections": {"ro": profile(one_server, "ro")},
+            "audit": {"enabled": True, "path": str(log), "log_params": True},
+            "custom_tools": {
+                "order_count": {
+                    "name": "order_count",
+                    "description": "Count the orders of one customer of the shop.",
+                    "sql": "SELECT count(*) AS orders FROM shop.orders WHERE customer_id = $1",
+                    "params": [{"name": "customer_id", "type": "integer"}],
+                }
+            },
+        }
+    )
+    server = build_server(config)
+    try:
+        async with Client(server, mode="auto") as client:
+            result = await client.call_tool("pgx_order_count", {"customer_id": 8})
+            assert not result.is_error
+        entry = json.loads(log.read_text().splitlines()[-1])
+        assert entry["tool"] == "pgx_order_count"
+        assert entry["connection"] == "ro"  # the default one, by name
+        assert entry["sql"].startswith("SELECT count(*) AS orders")
+        assert entry["params"] == {"customer_id": 8}
+    finally:
+        REGISTRY.pop("pgx_order_count", None)
+        set_app(None)
+
+
 async def test_disabled_tools_and_groups(one_server: Server) -> None:
     config = Config.model_validate(
         {

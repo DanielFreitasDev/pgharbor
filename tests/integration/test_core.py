@@ -173,6 +173,63 @@ async def test_audit_log_records_calls(ready: Server, tmp_path: Path) -> None:
         set_app(None)
 
 
+async def test_audit_log_names_the_default_connection_and_optionally_the_parameters(
+    ready: Server, tmp_path: Path
+) -> None:
+    def application_with(**audit: Any) -> App:
+        return App(
+            Config.model_validate(
+                {
+                    "connections": {"only": profile(ready, "only")},
+                    "audit": {"enabled": True, **audit},
+                }
+            )
+        )
+
+    quiet = application_with(path=str(tmp_path / "quiet.jsonl"))
+    set_app(quiet)
+    try:
+        await pg_query(sql="SELECT $1::int AS n", params=[42])  # no connection named
+        entry = (await call(pg_audit_log, limit=5))["entries"][-1]
+        assert entry["connection"] == "only"
+        assert "params" not in entry  # bound values stay out of the log by default
+    finally:
+        await quiet.close()
+        set_app(None)
+
+    verbose = application_with(path=str(tmp_path / "verbose.jsonl"), log_params=True)
+    set_app(verbose)
+    try:
+        await pg_query(sql="SELECT $1::int AS n", params=[42])
+        entry = (await call(pg_audit_log, limit=5))["entries"][-1]
+        assert entry["sql"] == "SELECT $1::int AS n"
+        assert entry["params"] == [42]
+    finally:
+        await verbose.close()
+        set_app(None)
+
+
+async def test_statements_longer_than_the_limit_are_refused(ready: Server) -> None:
+    application = App(
+        Config.model_validate(
+            {
+                "connections": {"short": profile(ready, "short", max_sql_chars=200)},
+                "audit": {"enabled": False},
+            }
+        )
+    )
+    set_app(application)
+    try:
+        assert "rows" in await call(pg_query, connection="short", sql="SELECT 1 AS fits")
+        long_statement = "SELECT 1 AS " + "x" * 250
+        for tool in (pg_query, pg_explain, pg_validate_sql):
+            with pytest.raises(ToolError, match="the limit is 200"):
+                await tool(connection="short", sql=long_statement)
+    finally:
+        await application.close()
+        set_app(None)
+
+
 async def test_connection_errors_are_readable(ready: Server) -> None:
     config = Config.model_validate(
         {
