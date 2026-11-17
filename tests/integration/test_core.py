@@ -225,6 +225,38 @@ async def test_own_queries_skip_jit_and_expensive_statements_get_it_back(
         assert await db.value("SHOW jit") == "off"  # every transaction starts over
 
 
+async def test_answers_that_are_too_long_stay_valid_and_say_so(ready: Server) -> None:
+    wide = "SELECT g, repeat('x', 1900) AS filler FROM generate_series(1, 200) g"
+    application = App(
+        Config.model_validate(
+            {
+                "connections": {
+                    "ro": profile(ready, "ro"),
+                    "huge": profile(ready, "huge", max_result_chars=500_000),
+                },
+                "audit": {"enabled": False},
+            }
+        )
+    )
+    set_app(application)
+    try:
+        # The profile's own budget ends the answer on a row boundary...
+        normal = json.loads(await pg_query(connection="ro", sql=wide))
+        assert 0 < len(normal["rows"]) < 200
+        assert normal["has_more"] is True
+        # ...and a budget set above what one MCP answer can carry still does.
+        text = await pg_query(connection="huge", sql=wide)
+        assert len(text) <= 48_000
+        huge = json.loads(text)
+        assert 0 < len(huge["rows"]) < 200
+        assert huge["has_more"] is True
+        assert "rows fit in one answer" in huge["output_cut"]
+        assert huge["rows"][0][0] == 1
+    finally:
+        await application.close()
+        set_app(None)
+
+
 async def test_statements_longer_than_the_limit_are_refused(ready: Server) -> None:
     application = App(
         Config.model_validate(

@@ -11,6 +11,7 @@ enforce the connection profile (approval, access mode) before opening a transact
 import contextlib
 import functools
 import inspect
+import json
 import sys
 import time
 import traceback
@@ -252,13 +253,7 @@ def tool(
                     f"pgharbor hit an internal error in {name} ({type(exc).__name__}: {exc}). "
                     "Nothing was changed. Please report it."
                 ) from None
-            text = result if isinstance(result, str) else to_json(scrub_deep(result))
-            if len(text) > MAX_OUTPUT_CHARS:
-                text = (
-                    text[:MAX_OUTPUT_CHARS]
-                    + f"\n… [output cut: {len(text):,} characters in total. Ask for fewer "
-                    "rows, a narrower filter or a smaller limit.]"
-                )
+            text = _fit(result)
             app.audit.record(
                 tool=name,
                 connection=connection,
@@ -283,6 +278,56 @@ def tool(
         return run
 
     return decorate
+
+
+def _fit(result: Any) -> str:
+    """The answer as text, never longer than ``MAX_OUTPUT_CHARS``.
+
+    A tabular answer that is too long loses whole rows from the end, so that what
+    arrives is still valid JSON and says that it was shortened. Anything else is cut as
+    text, with a note: a last resort that the tools' own limits should never reach.
+    """
+    if isinstance(result, str):
+        text, cleaned = result, None
+    else:
+        cleaned = scrub_deep(result)
+        text = to_json(cleaned)
+    if len(text) <= MAX_OUTPUT_CHARS:
+        return text
+    if cleaned is None and text.startswith("{"):
+        try:  # a tool that rendered its own JSON
+            cleaned = json.loads(text)
+        except ValueError:
+            cleaned = None
+    rows = cleaned.get("rows") if isinstance(cleaned, dict) else None
+    if isinstance(cleaned, dict) and isinstance(rows, list) and rows:
+
+        def shortened(count: int) -> str:
+            return to_json(
+                {
+                    **cleaned,
+                    "rows": rows[:count],
+                    "has_more": True,
+                    "output_cut": f"{count} of {len(rows)} rows fit in one answer. Ask for "
+                    "fewer rows or columns, a narrower filter, or the next page.",
+                }
+            )
+
+        low, high = 0, len(rows) - 1
+        while low < high:  # the longest prefix that fits
+            middle = (low + high + 1) // 2
+            if len(shortened(middle)) <= MAX_OUTPUT_CHARS:
+                low = middle
+            else:
+                high = middle - 1
+        candidate = shortened(low)
+        if len(candidate) <= MAX_OUTPUT_CHARS:
+            return candidate
+    return (
+        text[:MAX_OUTPUT_CHARS]
+        + f"\n… [output cut: {len(text):,} characters in total. Ask for fewer rows, a "
+        "narrower filter or a smaller limit.]"
+    )
 
 
 def _audit_params(function: Callable[..., Any], kwargs: dict[str, Any]) -> Any:

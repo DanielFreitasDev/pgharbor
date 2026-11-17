@@ -245,7 +245,7 @@ class ConnectionConfig(_Model):
     max_rows: int = Field(default=200, ge=1)
     max_rows_limit: int = Field(default=5_000, ge=1)
     max_cell_chars: int = Field(default=2_000, ge=16)
-    max_result_chars: int = Field(default=60_000, ge=1_000)
+    max_result_chars: int = Field(default=40_000, ge=1_000)
     max_sql_chars: int = Field(default=100_000, ge=100)
     max_plan_cost: float | None = Field(default=None, gt=0)
 

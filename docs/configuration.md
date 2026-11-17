@@ -120,7 +120,7 @@ client certificates.
 | `max_rows` | `200` | rows returned when the agent does not ask for a number |
 | `max_rows_limit` | `5000` | the most rows the agent can ask for |
 | `max_cell_chars` | `2000` | values longer than this are cut, on the server. A call may ask for more for itself, up to 20,000 (or this value, if higher); `max_result_chars` still bounds the answer |
-| `max_result_chars` | `60000` | size of one answer |
+| `max_result_chars` | `40000` | size of the rows of one answer; when it is reached the answer says there is more. Whatever this is set to, no tool answer exceeds 48,000 characters: a longer table loses rows from the end and says so |
 | `max_sql_chars` | `100000` | longest statement accepted |
 | `max_plan_cost` | none | refuse queries whose estimated cost is higher (planner units) |
 
