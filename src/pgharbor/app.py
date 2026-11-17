@@ -10,6 +10,7 @@ enforce the connection profile (approval, access mode) before opening a transact
 
 import contextlib
 import functools
+import inspect
 import sys
 import time
 import traceback
@@ -46,7 +47,9 @@ class ToolSpec:
 
     @property
     def description(self) -> str:
-        return (self.function.__doc__ or "").strip()
+        # cleandoc: before Python 3.13 a docstring keeps the indentation of its lines,
+        # and the description is what every agent reads.
+        return inspect.cleandoc(self.function.__doc__ or "")
 
 
 REGISTRY: dict[str, ToolSpec] = {}

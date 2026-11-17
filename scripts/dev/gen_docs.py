@@ -13,6 +13,7 @@ from __future__ import annotations
 import inspect
 import re
 import sys
+import types
 import typing
 from pathlib import Path
 
@@ -67,9 +68,27 @@ def type_name(annotation: object) -> str:
     text = getattr(annotation, "__name__", None)
     if origin is None and text:
         return f"`{text}`"
-    rendered = str(annotation).replace("typing.", "").replace("NoneType", "None")
-    rendered = re.sub(r"Literal\[([^\]]*)\]", lambda m: m.group(1).replace(", ", " | "), rendered)
-    return "`" + rendered.replace("|", "\\|") + "`"
+    return "`" + _render(annotation).replace("|", "\\|") + "`"
+
+
+def _render(annotation: object) -> str:
+    """A type as text, built from its structure. ``str(annotation)`` cannot be used: the
+    same annotation prints as ``Optional[...]`` or ``... | None`` depending on the Python
+    version, and the generated reference must be the same on all of them."""
+    if annotation is None or annotation is type(None):
+        return "None"
+    origin = typing.get_origin(annotation)
+    arguments = typing.get_args(annotation)
+    if origin is typing.Literal:
+        return " | ".join(repr(a) for a in arguments)
+    if origin is typing.Union or origin is types.UnionType:
+        return " | ".join(_render(a) for a in arguments)
+    if origin is typing.Annotated:
+        return _render(arguments[0])
+    if origin is not None:
+        name = getattr(origin, "__name__", None) or str(origin).replace("typing.", "")
+        return f"{name}[{', '.join(_render(a) for a in arguments)}]" if arguments else name
+    return getattr(annotation, "__name__", None) or str(annotation).replace("typing.", "")
 
 
 def parameters(spec: ToolSpec) -> list[tuple[str, str, str]]:

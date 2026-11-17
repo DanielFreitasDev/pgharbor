@@ -114,3 +114,13 @@ def test_documented_test_counts_match_the_suite() -> None:
     ):
         assert phrase in (ROOT / readme).read_text(encoding="utf-8"), readme
     assert refusals > 180
+
+
+def test_tool_descriptions_carry_no_source_indentation() -> None:
+    """Before Python 3.13 a docstring keeps the indentation of its source lines; what
+    agents read must be the same text on every version."""
+    load_tool_modules()
+    for name, spec in REGISTRY.items():
+        body = [line for line in spec.description.splitlines()[1:] if line.strip()]
+        if body:
+            assert not body[0].startswith(" "), name
