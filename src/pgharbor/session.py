@@ -99,6 +99,8 @@ class ServerFacts:
     encoding: str
     extensions: dict[str, ExtensionInfo]
     catalog: frozenset[str]
+    jit: bool = False  # the session default; pgharbor's own queries run with it off
+    jit_above_cost: float = -1.0
     loaded_at: float = field(default_factory=time.monotonic)
 
     @property
@@ -201,6 +203,18 @@ class Db:
             if result is None:  # pragma: no cover - execute() always leaves a result
                 raise PgHarborError("the server returned no result")
             return result
+
+    async def restore_jit(self, estimated_cost: float | None) -> None:
+        """Give the server's JIT setting back to a statement of the caller.
+
+        The transaction starts with JIT off for pgharbor's own catalog queries. A
+        statement whose estimated cost reaches ``jit_above_cost`` is one the server
+        would compile, so it gets the session default back: what the caller measures is
+        what the server does. Cheaper statements never use JIT and need nothing.
+        """
+        facts = self.facts
+        if facts.jit and estimated_cost is not None and 0 <= facts.jit_above_cost <= estimated_cost:
+            await self.rows("SET LOCAL jit TO DEFAULT")
 
     async def copy_in(self, sql: str, chunks: AsyncIterator[bytes]) -> int:
         """Feed ``COPY ... FROM STDIN`` and return the number of rows loaded.
@@ -488,7 +502,9 @@ class Sessions:
         return facts
 
 
-def _begin_sql(profile: ConnectionConfig, *, write: bool, timeout_ms: int | None) -> str:
+def _begin_sql(
+    profile: ConnectionConfig, *, write: bool, timeout_ms: int | None, server_version: int = 0
+) -> str:
     """The opening script. Built only from validated integers and constants."""
     statement_timeout = int(timeout_ms or profile.statement_timeout)
     parts = [
@@ -505,6 +521,11 @@ def _begin_sql(profile: ConnectionConfig, *, write: bool, timeout_ms: int | None
     ]
     if not write:
         parts.append("SET LOCAL default_transaction_read_only = on")
+    if server_version >= 110000:
+        # The catalog queries behind every check are short; compiling them costs a
+        # quarter of a second each. Db.restore_jit gives the setting back to a
+        # statement of the caller that is expensive enough for the server to use it.
+        parts.append("SET LOCAL jit = off")
     if profile.role:
         parts.append(f"SET LOCAL ROLE {quote_ident(profile.role)}")
     parts.append(
@@ -536,7 +557,14 @@ async def _begin(
     timeout_ms: int | None,
 ) -> None:
     async with conn.cursor() as cur:
-        await cur.execute(_begin_sql(profile, write=write, timeout_ms=timeout_ms))
+        await cur.execute(
+            _begin_sql(
+                profile,
+                write=write,
+                timeout_ms=timeout_ms,
+                server_version=conn.info.server_version,
+            )
+        )
         check: tuple[Any, ...] | None = None
         while True:
             if cur.description is not None:
@@ -591,7 +619,11 @@ SELECT current_setting('server_version') AS version,
        (SELECT json_agg(c.relname)
           FROM pg_catalog.pg_class c
           JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-         WHERE n.nspname = 'pg_catalog' AND c.relkind IN ('r', 'v')) AS catalog
+         WHERE n.nspname = 'pg_catalog' AND c.relkind IN ('r', 'v')) AS catalog,
+       -- reset_val is the session default, whatever SET LOCAL did in this transaction.
+       (SELECT s.reset_val FROM pg_catalog.pg_settings s WHERE s.name = 'jit') AS jit,
+       (SELECT s.reset_val FROM pg_catalog.pg_settings s WHERE s.name = 'jit_above_cost')
+           AS jit_above_cost
 """
 
 
@@ -615,6 +647,8 @@ async def _load_facts(conn: psycopg.AsyncConnection[Any]) -> ServerFacts:
             for name, version, schema in (row["extensions"] or [])
         },
         catalog=frozenset(row["catalog"] or []),
+        jit=row["jit"] == "on",
+        jit_above_cost=float(row["jit_above_cost"]) if row["jit_above_cost"] else -1.0,
     )
 
 

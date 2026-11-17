@@ -209,6 +209,22 @@ async def test_audit_log_names_the_default_connection_and_optionally_the_paramet
         set_app(None)
 
 
+async def test_own_queries_skip_jit_and_expensive_statements_get_it_back(
+    ready: Server, sessions: Any
+) -> None:
+    async with sessions.transaction("ro") as db:
+        if not ready.at_least(11):
+            assert db.facts.jit is False  # the setting does not exist yet
+            return
+        assert await db.value("SHOW jit") == "off"
+        await db.restore_jit(db.facts.jit_above_cost - 1)  # a cheap statement: no change
+        assert await db.value("SHOW jit") == "off"
+        await db.restore_jit(db.facts.jit_above_cost + 1)
+        assert await db.value("SHOW jit") == ("on" if db.facts.jit else "off")
+    async with sessions.transaction("ro") as db:
+        assert await db.value("SHOW jit") == "off"  # every transaction starts over
+
+
 async def test_statements_longer_than_the_limit_are_refused(ready: Server) -> None:
     application = App(
         Config.model_validate(

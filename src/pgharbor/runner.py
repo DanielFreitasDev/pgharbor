@@ -147,6 +147,7 @@ async def run_query(
             analysis.sql, len(columns), cell, limit + 1, max(0, int(offset))
         )
 
+    await db.restore_jit(summary.total_cost)
     try:
         result = await db.raw(statement, params)
     except psycopg.errors.CannotCoerce:
@@ -272,6 +273,8 @@ async def explain_statement(
         options.append("BUFFERS")
     if settings and db.v >= 120000:
         options.append("SETTINGS")
+    # The plan shown is the plan the server would run, JIT section included.
+    await db.restore_jit(summary.total_cost)
     try:
         result = await db.raw(f"EXPLAIN ({', '.join(options)}) {wrapped}", params)
     except psycopg.Error as exc:
