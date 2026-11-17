@@ -40,7 +40,14 @@ from .render import REDACTED, compile_column_patterns, scrub
 from .session import Db, describe_db_error
 from .vetting import Vetting, relation_denied, vet_statement
 
-__all__ = ["Column", "QueryResult", "explain_statement", "run_query", "validate_statement"]
+__all__ = [
+    "Column",
+    "QueryResult",
+    "estimate_plan",
+    "explain_statement",
+    "run_query",
+    "validate_statement",
+]
 
 _WRAP_PREFIX = "SELECT * FROM (\n"
 _ALIAS = "_pgharbor"
@@ -101,8 +108,15 @@ async def run_query(
     max_rows: int | None = None,
     offset: int = 0,
     max_cell_chars: int | None = None,
+    row_cap: int | None = None,
+    char_budget: int | None = None,
 ) -> QueryResult:
-    """Run one read query through every check. ``db`` must be a read-only transaction."""
+    """Run one read query through every check. ``db`` must be a read-only transaction.
+
+    ``row_cap`` and ``char_budget`` replace the profile's ``max_rows_limit`` and
+    ``max_result_chars``. They exist for tools that write the result to a file instead of
+    sending it to the model; nothing an agent passes reaches them directly.
+    """
     if not db.read_only:
         raise AssertionError("run_query needs a read-only transaction")
     profile = db.profile
@@ -120,7 +134,7 @@ async def run_query(
     await _refuse_tainted_views(db, vetting)
 
     columns = await _describe(db, analysis, params)
-    limit = _row_limit(profile, max_rows)
+    limit = _row_limit(profile, max_rows, row_cap)
     cell = _cell_limit(profile, max_cell_chars)
     statement = _final_statement(analysis.sql, len(columns), cell, limit + 1, max(0, int(offset)))
 
@@ -128,7 +142,9 @@ async def run_query(
     rule_limit = _enforce_plan_rules(profile, analysis, vetting, summary)
     if rule_limit is not None and rule_limit < limit:
         limit = rule_limit
-        statement = _final_statement(analysis.sql, len(columns), cell, limit + 1, max(0, int(offset)))
+        statement = _final_statement(
+            analysis.sql, len(columns), cell, limit + 1, max(0, int(offset))
+        )
 
     try:
         result = await db.raw(statement, params)
@@ -141,7 +157,14 @@ async def run_query(
     except psycopg.Error as exc:
         raise _translate(exc, profile, analysis.sql) from exc
 
-    query_result = _build_result(result, columns, profile, limit=limit, cell=cell)
+    query_result = _build_result(
+        result,
+        columns,
+        profile,
+        limit=limit,
+        cell=cell,
+        budget=char_budget or profile.max_result_chars,
+    )
     query_result.relations = summary.relations()
     query_result.total_cost = summary.total_cost
     query_result.elapsed_ms = watch.ms
@@ -152,6 +175,24 @@ async def run_query(
             f"(max_rows up to {profile.max_rows_limit})."
         )
     return query_result
+
+
+async def estimate_plan(db: Db, sql: str, params: Sequence[Any] = ()) -> PlanSummary:
+    """Vet a read query and return the summary of its plan, without running it.
+
+    Every rule of the connection applies, exactly as in :func:`run_query`. Tools that
+    compare plans (an index advisor, for instance) call this instead of running EXPLAIN on
+    their own.
+    """
+    profile = db.profile
+    analysis = analyze(sql, max_chars=profile.max_sql_chars)
+    _require_query(analysis, profile)
+    _check_params(analysis, params)
+    vetting = await vet_statement(db, analysis, read_only=True)
+    await _refuse_tainted_views(db, vetting)
+    summary = await _preflight(db, f"{_WRAP_PREFIX}{analysis.sql}\n) AS {_ALIAS}", params, analysis)
+    _enforce_plan_rules(profile, analysis, vetting, summary)
+    return summary
 
 
 async def validate_statement(db: Db, sql: str, params: Sequence[Any] = ()) -> dict[str, Any]:
@@ -267,9 +308,7 @@ def _require_query(analysis: Analysis, profile: ConnectionConfig) -> None:
             hint=hint,
         )
     if analysis.kind == "explain":
-        raise Rejected(
-            "EXPLAIN is handled by the pg_explain tool", rule="use-pg-explain"
-        )
+        raise Rejected("EXPLAIN is handled by the pg_explain tool", rule="use-pg-explain")
     raise Rejected(
         f"{analysis.verb} is not a read query",
         rule="not-a-read-query",
@@ -288,10 +327,10 @@ def _check_params(analysis: Analysis, params: Sequence[Any]) -> None:
         )
 
 
-def _row_limit(profile: ConnectionConfig, requested: int | None) -> int:
+def _row_limit(profile: ConnectionConfig, requested: int | None, cap: int | None = None) -> int:
     if requested is None:
         return profile.max_rows
-    return max(1, min(int(requested), profile.max_rows_limit))
+    return max(1, min(int(requested), cap or profile.max_rows_limit))
 
 
 def _cell_limit(profile: ConnectionConfig, requested: int | None) -> int:
@@ -412,14 +451,18 @@ def _enforce_plan_rules(
     for relation in vetting.relations.values():
         rule = profile.protection_for(relation["schema"], relation["name"])
         qualified = f"{relation['schema']}.{relation['name']}"
-        if rule is not None and qualified not in touched and relation["kind"] != "v":
-            if rule.deny_columns or rule.require_index_filter:
-                raise Rejected(
-                    f"{qualified} is a protected table and this query reaches it indirectly "
-                    "(through a function, or the name is used for something else)",
-                    rule="protected-table-indirect",
-                    hint="Query the table directly, naming the columns.",
-                )
+        if (
+            rule is not None
+            and qualified not in touched
+            and relation["kind"] != "v"
+            and (rule.deny_columns or rule.require_index_filter)
+        ):
+            raise Rejected(
+                f"{qualified} is a protected table and this query reaches it indirectly "
+                "(through a function, or the name is used for something else)",
+                rule="protected-table-indirect",
+                hint="Query the table directly, naming the columns.",
+            )
 
     if profile.max_plan_cost is not None and summary.total_cost > profile.max_plan_cost:
         raise Rejected(
@@ -545,7 +588,9 @@ async def _refuse_tainted_views(db: Db, vetting: Vetting) -> None:
     def array(values: list[int]) -> str:
         return "{" + ",".join(str(v) for v in values) + "}"
 
-    tainted = {row["oid"] for row in await db.rows(_TAINTED_VIEWS_SQL, [array(oids), array(attnums)])}
+    tainted = {
+        row["oid"] for row in await db.rows(_TAINTED_VIEWS_SQL, [array(oids), array(attnums)])
+    }
     for oid, relation in views.items():
         if oid in tainted:
             raise Rejected(
@@ -562,6 +607,7 @@ def _build_result(
     *,
     limit: int,
     cell: int,
+    budget: int,
 ) -> QueryResult:
     count = result.nfields
     total = result.ntuples
@@ -590,7 +636,6 @@ def _build_result(
         )
 
     rows: list[list[Any]] = []
-    budget = profile.max_result_chars
     used = 0
     clipped = 0
     scrubbed = 0
@@ -658,7 +703,7 @@ def _convert(text: str, type_oid: int, clipped: bool) -> Any:
             value = float(text)
         except ValueError:
             return text
-        return value if value == value and abs(value) != float("inf") else text  # noqa: PLR0124
+        return value if value == value and abs(value) != float("inf") else text
     if type_oid == _NUMERIC and _PLAIN_NUMBER.fullmatch(text):
         if "." not in text:
             return int(text) if len(text) <= 18 else text
@@ -690,9 +735,7 @@ async def _run_show(db: Db, analysis: Analysis) -> QueryResult:
         ]
         return QueryResult(
             columns=columns,
-            rows=[
-                [r["name"], scrub(r["setting"] or ""), r["unit"], r["short_desc"]] for r in rows
-            ],
+            rows=[[r["name"], scrub(r["setting"] or ""), r["unit"], r["short_desc"]] for r in rows],
         )
     try:
         value = await db.value("SELECT pg_catalog.current_setting($1)", [setting])
@@ -708,20 +751,31 @@ def _translate(exc: psycopg.Error, profile: ConnectionConfig, sql: str) -> PgHar
 
     if state == "42601" and "multiple commands" in message:
         return Rejected(
-            "more than one statement was sent", rule="multiple-statements",
+            "more than one statement was sent",
+            rule="multiple-statements",
             hint="Send one statement per call.",
         )
     if isinstance(exc, psycopg.errors.ReadOnlySqlTransaction):
         return Rejected(
-            f"the server refused it: {message}", rule="read-only-transaction",
+            f"the server refused it: {message}",
+            rule="read-only-transaction",
             hint="This connection only reads.",
         )
     if state == "0A000" and "data-modifying" in message:
         return Rejected(
             "a WITH clause that changes data is not a read query", rule="not-a-read-query"
         )
-    if isinstance(exc, (psycopg.errors.QueryCanceled, psycopg.errors.LockNotAvailable,
-                        psycopg.errors.InsufficientPrivilege)) or not state:
+    if (
+        isinstance(
+            exc,
+            (
+                psycopg.errors.QueryCanceled,
+                psycopg.errors.LockNotAvailable,
+                psycopg.errors.InsufficientPrivilege,
+            ),
+        )
+        or not state
+    ):
         return PgHarborError(describe_db_error(exc, profile))
 
     # The server reports positions inside the wrapped statement; translate them back.
@@ -742,8 +796,7 @@ def _translate(exc: psycopg.Error, profile: ConnectionConfig, sql: str) -> PgHar
         parts.append(f"Hint: {exc.diag.message_hint}")
     if state == "42601":
         parts.append(
-            "Only a single read query is accepted here: SELECT, WITH ... SELECT, VALUES "
-            "or TABLE."
+            "Only a single read query is accepted here: SELECT, WITH ... SELECT, VALUES or TABLE."
         )
         return PgHarborError("Syntax error: " + " ".join(parts))
     return PgHarborError(f"PostgreSQL error [{state}]: " + " ".join(parts))

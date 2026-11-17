@@ -245,9 +245,13 @@ def _main_verb_after_with(tokens: list[Token]) -> str | None:
             depth -= 1
             if depth == 0:
                 closed_one = True
-        elif depth == 0 and closed_one and token.kind is Kind.IDENT:
-            if token.value in _QUERY_WORDS or token.value in _DML_WORDS:
-                return token.value
+        elif (
+            depth == 0
+            and closed_one
+            and token.kind is Kind.IDENT
+            and (token.value in _QUERY_WORDS or token.value in _DML_WORDS)
+        ):
+            return token.value
     return None
 
 

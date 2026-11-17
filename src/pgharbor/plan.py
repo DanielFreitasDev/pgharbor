@@ -100,7 +100,9 @@ class PlanSummary:
 
 def summarize_plan(explain_output: Any) -> PlanSummary:
     """Accept the value returned by ``EXPLAIN (FORMAT JSON)`` (text or parsed)."""
-    data = json.loads(explain_output) if isinstance(explain_output, (str, bytes)) else explain_output
+    data = (
+        json.loads(explain_output) if isinstance(explain_output, (str, bytes)) else explain_output
+    )
     root = data[0]["Plan"] if isinstance(data, list) else data["Plan"]
     summary = PlanSummary(
         total_cost=float(root.get("Total Cost", 0.0)),

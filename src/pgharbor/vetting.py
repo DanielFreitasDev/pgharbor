@@ -173,9 +173,7 @@ def relation_denied(
 
 def _matches(patterns: tuple[str, ...], schema: str, name: str) -> bool:
     qualified = f"{schema}.{name}"
-    return any(
-        fnmatch.fnmatchcase(qualified, p) or fnmatch.fnmatchcase(name, p) for p in patterns
-    )
+    return any(fnmatch.fnmatchcase(qualified, p) or fnmatch.fnmatchcase(name, p) for p in patterns)
 
 
 def _call_candidates(tokens: list[Token]) -> tuple[set[str], set[str], set[str]]:
@@ -325,19 +323,16 @@ def _judge_function(
     if builtin:
         if volatility == "v" and not is_safe_volatile(name):
             raise Rejected(
-                f"{name}() is a VOLATILE built-in function that is not on the safe list "
-                f"({where})",
+                f"{name}() is a VOLATILE built-in function that is not on the safe list ({where})",
                 rule="function-volatile",
             )
         return
 
     if profile.function_policy is FunctionPolicy.STRICT:
         raise Rejected(
-            f"{qualified}() is not a built-in function and function_policy is \"strict\" "
-            f"({where})",
+            f'{qualified}() is not a built-in function and function_policy is "strict" ({where})',
             rule="function-not-allowed",
-            hint=f'Add "{qualified}" to allow_functions in the connection profile if it is '
-            "safe.",
+            hint=f'Add "{qualified}" to allow_functions in the connection profile if it is safe.',
         )
     if volatility == "v" and not is_safe_volatile(name, builtin=False):
         raise Rejected(

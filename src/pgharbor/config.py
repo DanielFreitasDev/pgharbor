@@ -23,7 +23,7 @@ import re
 import stat
 import sys
 import tomllib
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
@@ -32,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from .errors import ConfigError
 
 __all__ = [
+    "DEFAULT_REDACT_COLUMNS",
     "Access",
     "Approval",
     "AuditConfig",
@@ -39,7 +40,6 @@ __all__ = [
     "ConnectionConfig",
     "CustomTool",
     "CustomToolParam",
-    "DEFAULT_REDACT_COLUMNS",
     "FunctionPolicy",
     "ProtectedTable",
     "WriteConfirmation",
@@ -109,7 +109,7 @@ DEFAULT_REDACT_COLUMNS: tuple[str, ...] = (
 )
 
 
-class Access(str, Enum):
+class Access(StrEnum):
     READ_ONLY = "read-only"
     READ_WRITE = "read-write"
     ADMIN = "admin"
@@ -119,18 +119,18 @@ class Access(str, Enum):
         return {"read-only": 0, "read-write": 1, "admin": 2}[self.value]
 
 
-class FunctionPolicy(str, Enum):
+class FunctionPolicy(StrEnum):
     STRICT = "strict"
     STANDARD = "standard"
     PERMISSIVE = "permissive"
 
 
-class Approval(str, Enum):
+class Approval(StrEnum):
     NEVER = "never"
     SESSION = "session"
 
 
-class WriteConfirmation(str, Enum):
+class WriteConfirmation(StrEnum):
     DIALOG = "dialog"
     CONVERSATION = "conversation"
     NONE = "none"
@@ -367,8 +367,7 @@ class ConnectionConfig(_Model):
             password = env.get(self.password_env)
             if password is None:
                 raise ConfigError(
-                    f"connection '{self.name}': environment variable {self.password_env} "
-                    "is not set"
+                    f"connection '{self.name}': environment variable {self.password_env} is not set"
                 )
             kwargs["password"] = password
         elif self.password_file:
@@ -523,8 +522,21 @@ def _from_file(file: Path) -> Config:
         raise ConfigError(f"{file}: [defaults] must be a table")
     forbidden = sorted(
         set(defaults)
-        & {"name", "dsn", "dsn_env", "host", "port", "dbname", "user", "user_env", "password",
-           "password_env", "password_file", "protect", "description"}
+        & {
+            "name",
+            "dsn",
+            "dsn_env",
+            "host",
+            "port",
+            "dbname",
+            "user",
+            "user_env",
+            "password",
+            "password_env",
+            "password_file",
+            "protect",
+            "description",
+        }
     )
     if forbidden:
         raise ConfigError(

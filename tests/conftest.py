@@ -12,6 +12,7 @@ Environment:
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 from collections.abc import AsyncIterator
@@ -21,6 +22,7 @@ from typing import Any
 import psycopg
 import pytest
 
+from pgharbor.app import App, set_app
 from pgharbor.config import Config
 from pgharbor.session import Sessions
 
@@ -29,8 +31,17 @@ from . import fixture
 HOST = os.environ.get("PGHARBOR_TEST_HOST", "127.0.0.1")
 PASSWORD = os.environ.get("PGHARBOR_TEST_PASSWORD", "pgharbor")
 _DEFAULT_MATRIX = {
-    "9.6": 55496, "10": 55410, "11": 55411, "12": 55412, "13": 55413, "14": 55414,
-    "15": 55415, "16": 55416, "17": 55417, "18": 55418, "19": 55419,
+    "9.6": 55496,
+    "10": 55410,
+    "11": 55411,
+    "12": 55412,
+    "13": 55413,
+    "14": 55414,
+    "15": 55415,
+    "16": 55416,
+    "17": 55417,
+    "18": 55418,
+    "19": 55419,
 }
 
 
@@ -68,6 +79,12 @@ def _reachable(port: int) -> bool:
 
 SERVERS = [Server(label, port) for label, port in _matrix().items() if _reachable(port)]
 
+# An optional PostgreSQL 18 with third-party extensions (hypopg, pgvector, PostGIS, pg_cron,
+# pg_partman...). Started by `scripts/pg-matrix.sh up extras`. Tests that need it take the
+# `extras` fixture and are skipped when it is not running.
+EXTRAS_PORT = int(os.environ.get("PGHARBOR_TEST_EXTRAS_PORT", "55500"))
+EXTRAS = Server("18", EXTRAS_PORT) if _reachable(EXTRAS_PORT) else None
+
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     if "server" in metafunc.fixturenames:
@@ -78,24 +95,47 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         else:
             metafunc.parametrize(
                 "server",
-                [pytest.param(None, marks=pytest.mark.skip(reason="no test server; run scripts/pg-matrix.sh up"))],
+                [
+                    pytest.param(
+                        None,
+                        marks=pytest.mark.skip(
+                            reason="no test server; run scripts/pg-matrix.sh up"
+                        ),
+                    )
+                ],
                 scope="session",
             )
 
 
+def superuser(server: Server, dbname: str = fixture.DATABASE) -> psycopg.Connection[Any]:
+    """A plain superuser connection (autocommit) for tests that must prepare something.
+
+    It bypasses pgharbor on purpose: use it to create what a test needs (a publication, a
+    replication slot, a blocked session) and to clean up afterwards. Never change the
+    shared sample database with it; create objects in a schema of your own and drop it.
+    """
+    return _connect(server, dbname)
+
+
 def _connect(server: Server, dbname: str) -> psycopg.Connection[Any]:
     return psycopg.connect(
-        host=HOST, port=server.port, user="postgres", password=PASSWORD, dbname=dbname,
-        autocommit=True, connect_timeout=10,
+        host=HOST,
+        port=server.port,
+        user="postgres",
+        password=PASSWORD,
+        dbname=dbname,
+        autocommit=True,
+        connect_timeout=10,
     )
 
 
 _READY: set[str] = set()
 
 
-def ensure_fixture(server: Server) -> None:
+def ensure_fixture(server: Server, key: str | None = None) -> None:
     """Build the sample database on ``server`` unless it is already up to date."""
-    if server.label in _READY:
+    key = key or server.label
+    if key in _READY:
         return
     with _connect(server, "postgres") as admin:
         exists = admin.execute(
@@ -110,7 +150,7 @@ def ensure_fixture(server: Server) -> None:
                 except psycopg.Error:
                     current = None
         if current == fixture.FIXTURE_VERSION:
-            _READY.add(server.label)
+            _READY.add(key)
             return
         # Serialize concurrent test runs that want to rebuild the same server.
         admin.execute("SELECT pg_advisory_lock(770077)")
@@ -120,7 +160,8 @@ def ensure_fixture(server: Server) -> None:
                 "WHERE datname = %s AND pid <> pg_backend_pid()",
                 [fixture.DATABASE],
             )
-            admin.execute(f"DROP DATABASE IF EXISTS {fixture.DATABASE}")
+            force = " WITH (FORCE)" if admin.info.server_version >= 130000 else ""
+            admin.execute(f"DROP DATABASE IF EXISTS {fixture.DATABASE}{force}")
             admin.execute(f"CREATE DATABASE {fixture.DATABASE}")
             role = admin.execute(
                 "SELECT 1 FROM pg_roles WHERE rolname = %s", [fixture.LIMITED_ROLE]
@@ -135,10 +176,12 @@ def ensure_fixture(server: Server) -> None:
                 available = {
                     r[0] for r in db.execute("SELECT name FROM pg_available_extensions").fetchall()
                 }
-                for extension in fixture.EXTENSIONS:
+                for extension in (*fixture.EXTENSIONS, *fixture.EXTRA_EXTENSIONS):
                     if extension in available:
                         db.execute(f"CREATE EXTENSION IF NOT EXISTS {extension}")
                 for statement in fixture.statements(version):
+                    db.execute(statement)
+                for statement in fixture.extras_statements(available):
                     db.execute(statement)
                 for statement in fixture.grants():
                     db.execute(statement)
@@ -146,7 +189,7 @@ def ensure_fixture(server: Server) -> None:
                 db.execute("INSERT INTO public._fixture VALUES (%s)", [fixture.FIXTURE_VERSION])
         finally:
             admin.execute("SELECT pg_advisory_unlock(770077)")
-    _READY.add(server.label)
+    _READY.add(key)
 
 
 def profile(server: Server, name: str, **overrides: Any) -> dict[str, Any]:
@@ -202,3 +245,53 @@ async def sessions(ready: Server) -> AsyncIterator[Sessions]:
         yield manager
     finally:
         await manager.close()
+
+
+@pytest.fixture(scope="session")
+def extras() -> Server:
+    """The server with third-party extensions, with the sample database loaded."""
+    if EXTRAS is None:
+        pytest.skip("extras server not running; run scripts/pg-matrix.sh up extras")
+    ensure_fixture(EXTRAS, key="extras")
+    return EXTRAS
+
+
+@pytest.fixture
+async def extras_app(extras: Server) -> AsyncIterator[App]:
+    application = App(build_config(extras))
+    set_app(application)
+    try:
+        yield application
+    finally:
+        await application.close()
+        set_app(None)
+
+
+@pytest.fixture
+async def app(ready: Server) -> AsyncIterator[App]:
+    """The application the tools use, pointed at the server under test."""
+    application = App(build_config(ready))
+    set_app(application)
+    try:
+        yield application
+    finally:
+        await application.close()
+        set_app(None)
+
+
+async def call(function: Any, /, **arguments: Any) -> Any:
+    """Call a tool the way the MCP server does and decode its answer.
+
+    Tools return text; when that text is JSON it is parsed so tests can look inside.
+    A refusal raises ``mcp.server.mcpserver.exceptions.ToolError``.
+    """
+    text = await function(**arguments)
+    try:
+        return json.loads(text)
+    except ValueError:
+        return text
+
+
+def rows_as_dicts(table: dict[str, Any]) -> list[dict[str, Any]]:
+    """Turn the compact ``{"columns": [...], "rows": [[...]]}`` form into dictionaries."""
+    return [dict(zip(table["columns"], row, strict=True)) for row in table["rows"]]

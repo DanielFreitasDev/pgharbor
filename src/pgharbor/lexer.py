@@ -24,7 +24,7 @@ The faithfulness of this scanner is tested against the real PostgreSQL scanner
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 __all__ = ["Kind", "LexError", "Token", "fold_identifier", "tokenize"]
 
@@ -38,7 +38,7 @@ _DIGITS = frozenset("0123456789")
 _ASCII_LETTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 
-class Kind(str, Enum):
+class Kind(StrEnum):
     """Token categories. Whitespace and comments never become tokens."""
 
     IDENT = "ident"  # unquoted identifier or keyword; ``value`` is case-folded

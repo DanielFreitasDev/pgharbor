@@ -35,7 +35,9 @@ REDACTED = "[redacted]"
 _SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # libpq keyword/value: password=secret  password='se cret'
     (
-        re.compile(r"(?i)\b(password|passwd|pwd|sslpassword)\s*=\s*('(?:[^'\\]|\\.)*'|[^\s;,&'\"]+)"),
+        re.compile(
+            r"(?i)\b(password|passwd|pwd|sslpassword)\s*=\s*('(?:[^'\\]|\\.)*'|[^\s;,&'\"]+)"
+        ),
         r"\1=" + REDACTED,
     ),
     # SQL: PASSWORD 'secret'   ENCRYPTED PASSWORD 'md5...'

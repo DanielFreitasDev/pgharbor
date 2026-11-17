@@ -26,7 +26,7 @@ The lists were built from the catalogs of PostgreSQL 9.6 through 19 and are chec
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 
 __all__ = [
     "ALWAYS_DENIED",
@@ -40,7 +40,7 @@ __all__ = [
 ]
 
 
-class Verdict(str, Enum):
+class Verdict(StrEnum):
     ALLOW = "allow"
     DENY_ALWAYS = "deny-always"
     DENY_READ_ONLY = "deny-read-only"

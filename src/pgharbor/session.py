@@ -77,7 +77,7 @@ class _NumericLoader(Loader):
             value = float(text)
         except ValueError:
             return text
-        return value if value == value and abs(value) != float("inf") else text  # noqa: PLR0124
+        return value if value == value and abs(value) != float("inf") else text
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,8 +157,7 @@ class Db:
         if self.v < minimum:
             wanted = "9.6" if minimum < 100000 else str(minimum // 10000)
             raise NotAvailable(
-                f"{feature} needs PostgreSQL {wanted} or newer; this server is "
-                f"{self.facts.label}."
+                f"{feature} needs PostgreSQL {wanted} or newer; this server is {self.facts.label}."
             )
 
     # ------------------------------------------------------------- trusted statements
@@ -208,9 +207,9 @@ class Db:
 def _adapt_params(params: Sequence[Any]) -> list[Any]:
     out: list[Any] = []
     for value in params:
-        if isinstance(value, dict):
-            out.append(Json(value))
-        elif isinstance(value, list) and any(isinstance(v, (dict, list)) for v in value):
+        if isinstance(value, dict) or (
+            isinstance(value, list) and any(isinstance(v, (dict, list)) for v in value)
+        ):
             out.append(Json(value))
         else:
             out.append(value)
@@ -386,8 +385,7 @@ class Sessions:
             raise Rejected(
                 f"connection '{profile.name}' is read-only",
                 rule="read-only-connection",
-                hint="Writing needs a connection configured with access = "
-                '"read-write" or "admin".',
+                hint='Writing needs a connection configured with access = "read-write" or "admin".',
             )
         pool = self._pools.get(profile.name)
         if pool is None:
@@ -576,8 +574,7 @@ def describe_db_error(exc: BaseException, profile: ConnectionConfig | None = Non
         )
     if isinstance(exc, psycopg.errors.ReadOnlySqlTransaction):
         return (
-            f"The server refused a write: the transaction is read-only{where}. "
-            f"({_first_line(exc)})"
+            f"The server refused a write: the transaction is read-only{where}. ({_first_line(exc)})"
         )
     if isinstance(exc, psycopg.errors.InsufficientPrivilege):
         return f"Permission denied{where}: {_first_line(exc)}"

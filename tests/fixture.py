@@ -10,7 +10,7 @@ stored version differs.
 
 from __future__ import annotations
 
-FIXTURE_VERSION = "7"
+FIXTURE_VERSION = "8"
 DATABASE = "pgharbor_test"
 LIMITED_ROLE = "harbor_ro"
 LIMITED_PASSWORD = "harbor_ro_pw"
@@ -51,8 +51,11 @@ def statements(v: int) -> list[str]:
     add("CREATE DOMAIN shop.email AS text CHECK (VALUE ~ '^[^@ ]+@[^@ ]+$')")
     add("CREATE TYPE shop.address AS (street text, city text, zip text)")
     add("CREATE SEQUENCE shop.invoice_seq START 1000 INCREMENT 5")
-    add("CREATE SEQUENCE shop.tiny_seq AS smallint MAXVALUE 100" if v >= 100000
-        else "CREATE SEQUENCE shop.tiny_seq MAXVALUE 100")
+    add(
+        "CREATE SEQUENCE shop.tiny_seq AS smallint MAXVALUE 100"
+        if v >= 100000
+        else "CREATE SEQUENCE shop.tiny_seq MAXVALUE 100"
+    )
     add("SELECT setval('shop.tiny_seq', 95)")
 
     # ----------------------------------------------------------------- tables
@@ -274,7 +277,9 @@ def statements(v: int) -> list[str]:
         SELECT 'file-' || g || '.pdf', md5(g::text), 'KEY-' || md5('k' || g), 1 + g % 20, g * 10
           FROM generate_series(1, 20000) g""")
     if v >= 100000:
-        add("INSERT INTO shop.invoices (order_id, amount) SELECT id, total FROM shop.orders LIMIT 50")
+        add(
+            "INSERT INTO shop.invoices (order_id, amount) SELECT id, total FROM shop.orders LIMIT 50"
+        )
     if v >= 120000:
         add("INSERT INTO shop.lines (net, tax) SELECT g, g * 0.1 FROM generate_series(1, 30) g")
     add("REFRESH MATERIALIZED VIEW analytics.daily_sales")
@@ -315,6 +320,53 @@ def statements(v: int) -> list[str]:
     add("CREATE OPERATOR trap.@@@ (LEFTARG = int, RIGHTARG = int, PROCEDURE = trap.volatile_op)")
 
     add("ANALYZE")
+    return out
+
+
+# Third-party extensions, present only on the "extras" test server.
+EXTRA_EXTENSIONS = (
+    "hypopg",
+    "vector",
+    "postgis",
+    "pg_cron",
+    "pg_repack",
+    "pg_stat_kcache",
+    "pg_qualstats",
+    "pg_wait_sampling",
+    "pgaudit",
+)
+
+
+def extras_statements(available: set[str]) -> list[str]:
+    """Sample objects for the third-party extensions that are installed."""
+    out: list[str] = []
+    if "pg_partman" in available:
+        out.append("CREATE SCHEMA IF NOT EXISTS partman")
+        out.append("CREATE EXTENSION IF NOT EXISTS pg_partman SCHEMA partman")
+    if "vector" in available:
+        out.append("""
+            CREATE TABLE shop.embeddings (
+                id serial PRIMARY KEY, product_id int REFERENCES shop.products (id),
+                embedding vector(3) NOT NULL)""")
+        out.append("""
+            INSERT INTO shop.embeddings (product_id, embedding)
+            SELECT g, ('[' || g || ',' || g % 7 || ',' || g % 3 || ']')::vector
+              FROM generate_series(1, 100) g""")
+        out.append(
+            "CREATE INDEX embeddings_hnsw_idx ON shop.embeddings "
+            "USING hnsw (embedding vector_l2_ops)"
+        )
+    if "postgis" in available:
+        out.append("""
+            CREATE TABLE shop.stores (
+                id serial PRIMARY KEY, name text NOT NULL, geom geometry(Point, 4326))""")
+        out.append("""
+            INSERT INTO shop.stores (name, geom)
+            SELECT 'Store ' || g, ST_SetSRID(ST_MakePoint(-38.5 + g * 0.01, -3.7 + g * 0.01), 4326)
+              FROM generate_series(1, 25) g""")
+        out.append("CREATE INDEX stores_geom_idx ON shop.stores USING gist (geom)")
+    if "pg_cron" in available:
+        out.append("SELECT cron.schedule('nightly-analyze', '0 3 * * *', 'ANALYZE shop.orders')")
     return out
 
 

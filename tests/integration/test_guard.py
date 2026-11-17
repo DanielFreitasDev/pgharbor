@@ -17,8 +17,14 @@ from pgharbor.session import Sessions
 pytestmark = pytest.mark.integration
 
 
-async def query(sessions: Sessions, sql: str, params: list[Any] | None = None, *,
-                connection: str = "ro", **options: Any):
+async def query(
+    sessions: Sessions,
+    sql: str,
+    params: list[Any] | None = None,
+    *,
+    connection: str = "ro",
+    **options: Any,
+):
     async with sessions.transaction(connection) as db:
         return await run_query(db, sql, params or [], **options)
 
@@ -377,7 +383,9 @@ async def test_requested_rows_are_capped_by_the_profile(sessions: Sessions) -> N
 
 async def test_long_values_are_clipped_on_the_server(sessions: Sessions) -> None:
     result = await query(
-        sessions, "SELECT notes, length(notes) FROM shop.customers WHERE id = 50", max_cell_chars=100
+        sessions,
+        "SELECT notes, length(notes) FROM shop.customers WHERE id = 50",
+        max_cell_chars=100,
     )
     text, length = result.rows[0]
     assert length == 6000
@@ -398,10 +406,24 @@ async def test_values_keep_their_types(sessions: Sessions) -> None:
         " timestamptz '2026-11-17 10:00:00+00' AS ts, interval '1 day 02:00' AS iv,"
         " 'a'::bytea AS raw, '10.0.0.1'::inet AS ip",
     )
-    assert result.rows == [[
-        7, 9007199254740993, True, "1.50", 2.5, "NaN", {"a": [1, None]}, "{x,y}", None,
-        "2026-11-17", "2026-11-17 10:00:00+00", "1 day 02:00:00", "\\x61", "10.0.0.1",
-    ]]
+    assert result.rows == [
+        [
+            7,
+            9007199254740993,
+            True,
+            "1.50",
+            2.5,
+            "NaN",
+            {"a": [1, None]},
+            "{x,y}",
+            None,
+            "2026-11-17",
+            "2026-11-17 10:00:00+00",
+            "1 day 02:00:00",
+            "\\x61",
+            "10.0.0.1",
+        ]
+    ]
     types = [c.type for c in result.columns]
     assert types[:5] == ["integer", "bigint", "boolean", "numeric(10,2)", "double precision"]
 
@@ -414,7 +436,9 @@ async def test_parameters_are_bound(sessions: Sessions) -> None:
     )
     assert [r[0] for r in result.rows] == [3, 5]
     hostile = await query(
-        sessions, "SELECT count(*) FROM shop.no_pk WHERE code = $1", ["a'; DROP TABLE shop.no_pk; --"]
+        sessions,
+        "SELECT count(*) FROM shop.no_pk WHERE code = $1",
+        ["a'; DROP TABLE shop.no_pk; --"],
     )
     assert hostile.rows == [[0]]
     with pytest.raises(Rejected) as caught:
