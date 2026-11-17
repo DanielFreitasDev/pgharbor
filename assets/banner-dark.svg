@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="pgharbor: a safe harbor between AI agents and PostgreSQL">
+<title>pgharbor: a safe harbor between AI agents and PostgreSQL</title>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#0f1b2d"/></linearGradient><linearGradient id="mark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#6ea8e0"/></linearGradient></defs>
+<rect x="0.5" y="0.5" width="1199" height="299" rx="18" fill="url(#bg)" stroke="#22304a"/>
+<rect x="64" y="74" width="152" height="152" rx="33.44" fill="url(#mark)" stroke="none" stroke-width="1"/>
+<path d="M94.4 116.56 A 51.68 51.68 0 1 0 185.6 116.56" fill="none" stroke="#06121f" stroke-width="10.64" stroke-linecap="round"/>
+<path d="M117.2 125.68 V171.28 A 22.8 8.36 0 0 0 162.8 171.28 V125.68" fill="#06121f"/><ellipse cx="140.0" cy="125.68" rx="22.8" ry="8.36" fill="#06121f"/><path d="M117.2 148.48 A 22.8 8.36 0 0 0 162.8 148.48" fill="none" stroke="url(#mark)" stroke-width="3.9520000000000004"/><ellipse cx="140.0" cy="125.68" rx="18.240000000000002" ry="5.319999999999999" fill="url(#mark)" opacity="0.55"/>
+<text x="256" y="138" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="76" font-weight="800" fill="#e6edf7" text-anchor="start" letter-spacing="-2" xml:space="preserve">pgharbor</text>
+<text x="258" y="186" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="27" font-weight="500" fill="#9fb0c8" text-anchor="start" xml:space="preserve">A safe harbor between AI agents and PostgreSQL.</text>
+<rect x="258.0" y="214" width="199" height="32" rx="16.0" fill="#16304f" stroke="none" stroke-width="1"/>
+<text x="357.5" y="233" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#6ea8e0" text-anchor="middle" xml:space="preserve">PostgreSQL 9.6 → 19</text>
+<rect x="469.0" y="214" width="99" height="32" rx="16.0" fill="#0f3b3a" stroke="none" stroke-width="1"/>
+<text x="518.5" y="233" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#2dd4bf" text-anchor="middle" xml:space="preserve">54 tools</text>
+<rect x="580.0" y="214" width="208" height="32" rx="16.0" fill="#12351f" stroke="none" stroke-width="1"/>
+<text x="684.0" y="233" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#4ade80" text-anchor="middle" xml:space="preserve">read-only by default</text>
+<rect x="800.0" y="214" width="154" height="32" rx="16.0" fill="#16304f" stroke="none" stroke-width="1"/>
+<text x="877.0" y="233" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#6ea8e0" text-anchor="middle" xml:space="preserve">MCP 2026-07-28</text>
+</svg>

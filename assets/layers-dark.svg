@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-label="The six layers every query goes through">
+<title>The six layers every query goes through</title>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#0f1b2d"/></linearGradient><linearGradient id="mark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#6ea8e0"/></linearGradient></defs>
+<rect x="0.5" y="0.5" width="1199" height="559" rx="18" fill="url(#bg)" stroke="#22304a"/>
+<text x="48" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#e6edf7" text-anchor="start" xml:space="preserve">Every query goes through six layers</text>
+<text x="48" y="94" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">Each one can refuse. The ones that decide what a statement is are enforced by PostgreSQL itself.</text>
+<rect x="48" y="132" width="172" height="150" rx="14" fill="#131f33" stroke="#263750" stroke-width="1"/>
+<rect x="48" y="132" width="172" height="6" rx="3" fill="#6ea8e0" stroke="none" stroke-width="1"/>
+<circle cx="78" cy="174" r="16" fill="#16304f"/>
+<text x="78" y="180" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#6ea8e0" text-anchor="middle" xml:space="preserve">1</text>
+<text x="64" y="224" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e6edf7" text-anchor="start" xml:space="preserve">Scan</text>
+<text x="64" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">PostgreSQL-faithful</text>
+<text x="64" y="267" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">lexer</text>
+<line x1="134.0" y1="282" x2="134.0" y2="310" stroke="#22304a" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 5"/>
+<rect x="48" y="310" width="172" height="182" rx="14" fill="#3d1a1c" stroke="none" stroke-width="1"/>
+<text x="64" y="338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#f87171" text-anchor="start" letter-spacing="1.2" xml:space="preserve">STOPS</text>
+<text x="64" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">two statements</text>
+<text x="64" y="392" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">unterminated text</text>
+<text x="64" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">U&amp; escapes</text>
+<rect x="234" y="132" width="172" height="150" rx="14" fill="#131f33" stroke="#263750" stroke-width="1"/>
+<rect x="234" y="132" width="172" height="6" rx="3" fill="#6ea8e0" stroke="none" stroke-width="1"/>
+<circle cx="264" cy="174" r="16" fill="#16304f"/>
+<text x="264" y="180" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#6ea8e0" text-anchor="middle" xml:space="preserve">2</text>
+<text x="250" y="224" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e6edf7" text-anchor="start" xml:space="preserve">Vet</text>
+<text x="250" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">names checked in the</text>
+<text x="250" y="267" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">catalog</text>
+<line x1="320.0" y1="282" x2="320.0" y2="310" stroke="#22304a" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 5"/>
+<rect x="234" y="310" width="172" height="182" rx="14" fill="#3d1a1c" stroke="none" stroke-width="1"/>
+<text x="250" y="338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#f87171" text-anchor="start" letter-spacing="1.2" xml:space="preserve">STOPS</text>
+<text x="250" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">pg_read_file, dblink</text>
+<text x="250" y="392" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">pg_sleep, set_config</text>
+<text x="250" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">views and functions</text>
+<text x="250" y="439" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">that hide them</text>
+<rect x="420" y="132" width="172" height="150" rx="14" fill="#131f33" stroke="#263750" stroke-width="1"/>
+<rect x="420" y="132" width="172" height="6" rx="3" fill="#2dd4bf" stroke="none" stroke-width="1"/>
+<circle cx="450" cy="174" r="16" fill="#0f3b3a"/>
+<text x="450" y="180" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#2dd4bf" text-anchor="middle" xml:space="preserve">3</text>
+<text x="436" y="224" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e6edf7" text-anchor="start" xml:space="preserve">Server decides</text>
+<text x="436" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">sub-select, extended</text>
+<text x="436" y="267" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">protocol</text>
+<line x1="506.0" y1="282" x2="506.0" y2="310" stroke="#22304a" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 5"/>
+<rect x="420" y="310" width="172" height="182" rx="14" fill="#3d1a1c" stroke="none" stroke-width="1"/>
+<text x="436" y="338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#f87171" text-anchor="start" letter-spacing="1.2" xml:space="preserve">STOPS</text>
+<text x="436" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">INSERT, UPDATE, DDL</text>
+<text x="436" y="392" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">SET, COPY, DO, LOCK</text>
+<text x="436" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">COMMIT; DROP ...</text>
+<rect x="606" y="132" width="172" height="150" rx="14" fill="#131f33" stroke="#263750" stroke-width="1"/>
+<rect x="606" y="132" width="172" height="6" rx="3" fill="#2dd4bf" stroke="none" stroke-width="1"/>
+<circle cx="636" cy="174" r="16" fill="#0f3b3a"/>
+<text x="636" y="180" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#2dd4bf" text-anchor="middle" xml:space="preserve">4</text>
+<text x="622" y="224" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e6edf7" text-anchor="start" xml:space="preserve">Pre-flight</text>
+<text x="622" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">EXPLAIN before</text>
+<text x="622" y="267" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">running</text>
+<line x1="692.0" y1="282" x2="692.0" y2="310" stroke="#22304a" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 5"/>
+<rect x="606" y="310" width="172" height="182" rx="14" fill="#3d1a1c" stroke="none" stroke-width="1"/>
+<text x="622" y="338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#f87171" text-anchor="start" letter-spacing="1.2" xml:space="preserve">STOPS</text>
+<text x="622" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">full scans of</text>
+<text x="622" y="383" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">protected tables</text>
+<text x="622" y="411" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">denied relations</text>
+<text x="622" y="439" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">plans above the cost</text>
+<text x="622" y="458" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">ceiling</text>
+<rect x="792" y="132" width="172" height="150" rx="14" fill="#131f33" stroke="#263750" stroke-width="1"/>
+<rect x="792" y="132" width="172" height="6" rx="3" fill="#2dd4bf" stroke="none" stroke-width="1"/>
+<circle cx="822" cy="174" r="16" fill="#0f3b3a"/>
+<text x="822" y="180" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#2dd4bf" text-anchor="middle" xml:space="preserve">5</text>
+<text x="808" y="224" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e6edf7" text-anchor="start" xml:space="preserve">Run, bounded</text>
+<text x="808" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">limits applied on the</text>
+<text x="808" y="267" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">server</text>
+<line x1="878.0" y1="282" x2="878.0" y2="310" stroke="#22304a" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 5"/>
+<rect x="792" y="310" width="172" height="182" rx="14" fill="#3d1a1c" stroke="none" stroke-width="1"/>
+<text x="808" y="338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#f87171" text-anchor="start" letter-spacing="1.2" xml:space="preserve">STOPS</text>
+<text x="808" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">unbounded result</text>
+<text x="808" y="383" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">sets</text>
+<text x="808" y="411" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">500 MB values</text>
+<text x="808" y="439" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">runaway queries</text>
+<rect x="978" y="132" width="172" height="150" rx="14" fill="#131f33" stroke="#263750" stroke-width="1"/>
+<rect x="978" y="132" width="172" height="6" rx="3" fill="#2dd4bf" stroke="none" stroke-width="1"/>
+<circle cx="1008" cy="174" r="16" fill="#0f3b3a"/>
+<text x="1008" y="180" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#2dd4bf" text-anchor="middle" xml:space="preserve">6</text>
+<text x="994" y="224" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e6edf7" text-anchor="start" xml:space="preserve">Rollback</text>
+<text x="994" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">then DISCARD ALL</text>
+<line x1="1064.0" y1="282" x2="1064.0" y2="310" stroke="#22304a" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 5"/>
+<rect x="978" y="310" width="172" height="182" rx="14" fill="#3d1a1c" stroke="none" stroke-width="1"/>
+<text x="994" y="338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#f87171" text-anchor="start" letter-spacing="1.2" xml:space="preserve">STOPS</text>
+<text x="994" y="364" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">leftover locks</text>
+<text x="994" y="392" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">changed settings</text>
+<text x="994" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#e6edf7" text-anchor="start" xml:space="preserve">session state</text>
+<rect x="48" y="516" width="14" height="14" rx="4" fill="#6ea8e0" stroke="none" stroke-width="1"/>
+<text x="70" y="528" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">checked by pgharbor before anything reaches the server</text>
+<rect x="520" y="516" width="14" height="14" rx="4" fill="#2dd4bf" stroke="none" stroke-width="1"/>
+<text x="542" y="528" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9fb0c8" text-anchor="start" xml:space="preserve">enforced by the PostgreSQL server</text>
+</svg>

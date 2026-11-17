@@ -1,0 +1,63 @@
+# Development, staging and production side by side.
+#
+# - dev accepts INSERT/UPDATE/DELETE, each one confirmed by you.
+# - staging is read-only.
+# - prod is read-only, needs your approval once per session, refuses heavy queries and
+#   protects a table with sensitive columns.
+
+[defaults]
+statement_timeout = "30s"
+lock_timeout = "3s"
+max_rows = 200
+
+[connections.dev]
+description = "Development"
+environment = "development"
+host = "dev-db.internal"
+dbname = "app"
+user_env = "APP_DB_USER"
+password_env = "APP_DB_PASSWORD"
+access = "read-write"
+
+[connections.staging]
+description = "Staging, refreshed from production every night"
+environment = "staging"
+host = "staging-db.internal"
+dbname = "app"
+user_env = "APP_DB_USER"
+password_env = "APP_DB_PASSWORD"
+
+[connections.prod]
+description = "Production (read-only replica)"
+environment = "production"
+host = "prod-replica.internal"
+dbname = "app"
+user_env = "APP_RO_USER"
+password_env = "APP_RO_PASSWORD"
+access = "read-only"
+statement_timeout = "15s"
+max_plan_cost = 500000
+pool_size = 1
+idle_close = 0                 # do not keep a production connection open between calls
+function_policy = "strict"     # only built-in functions, plus the ones listed below
+allow_functions = ["app.format_*"]
+allow_export = false
+
+[connections.prod.params]
+sslmode = "verify-full"
+sslrootcert = "/etc/ssl/certs/company-ca.pem"
+
+[[connections.prod.protect]]
+table = "billing.cards"
+deny_columns = ["card_number", "cvv"]
+require_index_filter = true
+max_rows = 100
+note = "Filter by id or customer_id."
+
+[[connections.prod.protect]]
+table = "audit.*"              # every table of the audit schema
+require_index_filter = true
+note = "These tables are huge: filter by id or by created_at with a narrow range."
+
+[audit]
+enabled = true

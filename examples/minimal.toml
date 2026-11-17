@@ -1,0 +1,9 @@
+# The smallest useful configuration: one database, read-only.
+# Save as ~/.config/pgharbor/config.toml (or pass --config).
+
+[connections.dev]
+host = "localhost"
+port = 5432
+dbname = "app"
+user_env = "PGUSER"            # the user name is read from $PGUSER
+password_env = "PGPASSWORD"    # the password is read from $PGPASSWORD

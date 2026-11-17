@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-label="How pgharbor sits between the agent and the databases">
+<title>How pgharbor sits between the agent and the databases</title>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7fafc"/><stop offset="1" stop-color="#eef3f9"/></linearGradient><linearGradient id="mark" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f8f83"/><stop offset="1" stop-color="#2f6aa3"/></linearGradient></defs>
+<rect x="0.5" y="0.5" width="1199" height="429" rx="18" fill="url(#bg)" stroke="#d5deea"/>
+<text x="48" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">Where pgharbor sits</text>
+<text x="48" y="94" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="17" font-weight="400" fill="#4a5b73" text-anchor="start" xml:space="preserve">One local process, started by your MCP client. It listens on stdio only: there is no network port.</text>
+<rect x="48" y="134" width="210" height="248" rx="16" fill="#ffffff" stroke="#d5deea" stroke-width="1"/>
+<text x="70" y="174" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">AI agent</text>
+<text x="70" y="210" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#4a5b73" text-anchor="start" xml:space="preserve">Claude Code</text>
+<text x="70" y="235" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#4a5b73" text-anchor="start" xml:space="preserve">Claude Desktop</text>
+<text x="70" y="260" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#4a5b73" text-anchor="start" xml:space="preserve">Codex, Cursor,</text>
+<text x="70" y="285" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#4a5b73" text-anchor="start" xml:space="preserve">VS Code, Gemini CLI</text>
+<rect x="70" y="324" width="166" height="34" rx="8" fill="#e1ecf8" stroke="none" stroke-width="1"/>
+<text x="153" y="346" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#2f6aa3" text-anchor="middle" xml:space="preserve">plain language</text>
+<line x1="268" y1="238" x2="328.6" y2="238" stroke="#7a8aa1" stroke-width="2" stroke-linecap="round"/>
+<path d="M325 232 L334 238 L325 244" fill="none" stroke="#7a8aa1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="334" y1="278" x2="273.4" y2="278" stroke="#7a8aa1" stroke-width="2" stroke-linecap="round"/>
+<path d="M277 272 L268 278 L277 284" fill="none" stroke="#7a8aa1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="301" y="224" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#7a8aa1" text-anchor="middle" xml:space="preserve">MCP</text>
+<text x="301" y="304" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#7a8aa1" text-anchor="middle" xml:space="preserve">stdio</text>
+<rect x="344" y="134" width="476" height="248" rx="16" fill="#ffffff" stroke="#0f8f83" stroke-width="2"/>
+<rect x="368" y="156" width="40" height="40" rx="8.8" fill="url(#mark)" stroke="none" stroke-width="1"/>
+<path d="M376.0 167.2 A 13.600000000000001 13.600000000000001 0 1 0 400.0 167.2" fill="none" stroke="#06121f" stroke-width="2.8000000000000003" stroke-linecap="round"/>
+<path d="M382.0 169.6 V181.6 A 6.0 2.2 0 0 0 394.0 181.6 V169.6" fill="#06121f"/><ellipse cx="388.0" cy="169.6" rx="6.0" ry="2.2" fill="#06121f"/><path d="M382.0 175.6 A 6.0 2.2 0 0 0 394.0 175.6" fill="none" stroke="url(#mark)" stroke-width="1.04"/><ellipse cx="388.0" cy="169.6" rx="4.8" ry="1.4000000000000001" fill="url(#mark)" opacity="0.55"/>
+<text x="420" y="184" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="23" font-weight="800" fill="#0f1c2e" text-anchor="start" xml:space="preserve">pgharbor</text>
+<rect x="368" y="208" width="428" height="34" rx="8" fill="#f3f6fa" stroke="#d5deea" stroke-width="1"/>
+<text x="382" y="230" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">Connection profiles</text>
+<text x="782" y="230" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#4a5b73" text-anchor="end" xml:space="preserve">access mode, limits, protected tables</text>
+<rect x="368" y="250" width="428" height="34" rx="8" fill="#f3f6fa" stroke="#d5deea" stroke-width="1"/>
+<text x="382" y="272" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">Safety layers</text>
+<text x="782" y="272" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#4a5b73" text-anchor="end" xml:space="preserve">scan, vet, pre-flight, bounded run</text>
+<rect x="368" y="292" width="428" height="34" rx="8" fill="#f3f6fa" stroke="#d5deea" stroke-width="1"/>
+<text x="382" y="314" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">Tools</text>
+<text x="782" y="314" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#4a5b73" text-anchor="end" xml:space="preserve">schema, queries, performance, security</text>
+<rect x="368" y="334" width="428" height="34" rx="8" fill="#f3f6fa" stroke="#d5deea" stroke-width="1"/>
+<text x="382" y="356" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">Approval and audit</text>
+<text x="782" y="356" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#4a5b73" text-anchor="end" xml:space="preserve">human dialog, append-only log</text>
+<line x1="828" y1="258" x2="902.6" y2="258" stroke="#7a8aa1" stroke-width="2" stroke-linecap="round"/>
+<path d="M899 252 L908 258 L899 264" fill="none" stroke="#7a8aa1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="868" y="244" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#7a8aa1" text-anchor="middle" xml:space="preserve">SQL</text>
+<rect x="916" y="134" width="236" height="76" rx="14" fill="#ffffff" stroke="#d5deea" stroke-width="1"/>
+<path d="M940 160 V184 A 16 6 0 0 0 972 184 V160" fill="none" stroke="#15803d" stroke-width="2.2"/><ellipse cx="956" cy="160" rx="16" ry="6" fill="none" stroke="#15803d" stroke-width="2.2"/><path d="M940 172 A 16 6 0 0 0 972 172" fill="none" stroke="#15803d" stroke-width="2.2"/>
+<text x="990" y="168" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">dev</text>
+<rect x="990" y="178" width="92" height="22" rx="11" fill="#dcf5e4" stroke="none" stroke-width="1"/>
+<text x="999" y="194" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#15803d" text-anchor="start" xml:space="preserve">read-write</text>
+<rect x="916" y="220" width="236" height="76" rx="14" fill="#ffffff" stroke="#d5deea" stroke-width="1"/>
+<path d="M940 246 V270 A 16 6 0 0 0 972 270 V246" fill="none" stroke="#2f6aa3" stroke-width="2.2"/><ellipse cx="956" cy="246" rx="16" ry="6" fill="none" stroke="#2f6aa3" stroke-width="2.2"/><path d="M940 258 A 16 6 0 0 0 972 258" fill="none" stroke="#2f6aa3" stroke-width="2.2"/>
+<text x="990" y="254" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">staging</text>
+<rect x="990" y="264" width="85" height="22" rx="11" fill="#e1ecf8" stroke="none" stroke-width="1"/>
+<text x="999" y="280" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#2f6aa3" text-anchor="start" xml:space="preserve">read-only</text>
+<rect x="916" y="306" width="236" height="76" rx="14" fill="#ffffff" stroke="#d5deea" stroke-width="1"/>
+<path d="M940 332 V356 A 16 6 0 0 0 972 356 V332" fill="none" stroke="#b45309" stroke-width="2.2"/><ellipse cx="956" cy="332" rx="16" ry="6" fill="none" stroke="#b45309" stroke-width="2.2"/><path d="M940 344 A 16 6 0 0 0 972 344" fill="none" stroke="#b45309" stroke-width="2.2"/>
+<text x="990" y="340" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#0f1c2e" text-anchor="start" xml:space="preserve">prod</text>
+<rect x="990" y="350" width="122" height="22" rx="11" fill="#ffffff" stroke="#b45309" stroke-width="1"/>
+<text x="999" y="366" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#b45309" text-anchor="start" xml:space="preserve">needs approval</text>
+</svg>

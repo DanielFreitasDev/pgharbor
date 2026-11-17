@@ -1,0 +1,43 @@
+# Production without free SQL: the agent can only ask the questions defined here.
+#
+# Each [custom_tools.NAME] becomes a tool called pgx_NAME. Parameters are bound in the
+# order they are declared ($1, $2, ...), never pasted into the SQL.
+
+[connections.prod]
+environment = "production"
+host = "prod-replica.internal"
+dbname = "app"
+user_env = "APP_RO_USER"
+password_env = "APP_RO_PASSWORD"
+
+[tools]
+disabled = ["pg_query", "pg_sample_rows", "pg_export_query", "pg_stat_view"]
+
+[custom_tools.customer_by_email]
+description = "Find a customer by e-mail address: id, name, plan and when the account was created."
+sql = "SELECT id, name, plan, created_at FROM app.customers WHERE lower(email) = lower($1)"
+
+[[custom_tools.customer_by_email.params]]
+name = "email"
+type = "text"
+description = "E-mail address, any letter case"
+
+[custom_tools.recent_orders]
+description = "List the most recent orders of one customer, newest first, optionally only those in a given status."
+sql = """
+SELECT id, status, total, placed_at
+  FROM app.orders
+ WHERE customer_id = $1 AND status = coalesce($2, status)
+ ORDER BY placed_at DESC
+"""
+max_rows = 50
+
+[[custom_tools.recent_orders.params]]
+name = "customer_id"
+type = "integer"
+
+[[custom_tools.recent_orders.params]]
+name = "status"
+type = "text"
+required = false
+description = "new, paid, shipped or cancelled"
