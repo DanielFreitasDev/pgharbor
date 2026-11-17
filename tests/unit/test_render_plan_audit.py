@@ -1,6 +1,7 @@
 """Output shaping, credential scrubbing, plan reading and the audit log."""
 
 import json
+import os
 from pathlib import Path
 
 from pgharbor.audit import Audit
@@ -160,7 +161,8 @@ def test_audit_log(tmp_path: Path) -> None:
     assert "params" not in lines[0]  # parameters are not logged unless asked
     assert lines[0]["ms"] == 3.1
     assert lines[1]["rule"] == "function-denied"
-    assert path.stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":  # Windows has no permission bits to check
+        assert path.stat().st_mode & 0o777 == 0o600
     assert [entry["connection"] for entry in audit.tail(10)] == ["dev", "prod"]
     assert [entry["connection"] for entry in audit.tail(1)] == ["prod"]
 

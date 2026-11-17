@@ -47,7 +47,7 @@ def test_check_reports_each_connection(one_server: Server, tmp_path: Path) -> No
     result = run("--config", str(good), "check")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "ok    ro" in result.stdout
-    assert "PostgreSQL 18" in result.stdout
+    assert f"PostgreSQL {one_server.label}" in result.stdout
     assert "SUPERUSER" in result.stdout
     # Production is not opened just because someone ran a check.
     assert "skip  prod" in result.stdout
