@@ -1,0 +1,86 @@
+[project]
+name = "pgharbor"
+version = "0.1.0"
+description = "A safe harbor between AI agents and PostgreSQL: a complete MCP server, read-only by default, for PostgreSQL 9.6 to 19."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Daniel Freitas" }]
+keywords = ["mcp", "model-context-protocol", "postgresql", "postgres", "database", "ai-agents", "claude", "llm"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Database",
+  "Typing :: Typed",
+]
+dependencies = [
+  "mcp>=2.3,<3",
+  "psycopg[binary]>=3.3,<4",
+  "pydantic>=2.9,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/DanielFreitasDev/pgharbor"
+Repository = "https://github.com/DanielFreitasDev/pgharbor"
+Issues = "https://github.com/DanielFreitasDev/pgharbor/issues"
+Changelog = "https://github.com/DanielFreitasDev/pgharbor/blob/main/CHANGELOG.md"
+
+[project.scripts]
+pgharbor = "pgharbor.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=9",
+  "pytest-asyncio>=1.5",
+  "ruff>=0.17",
+  "mypy>=2.4",
+]
+# Test oracle only: the real PostgreSQL scanner, used to prove the lexer is faithful.
+# pglast is GPL-3.0-or-later, so it is never a runtime dependency.
+oracle = ["pglast>=8.8"]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pgharbor"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "integration: needs the PostgreSQL test matrix (scripts/pg-matrix.sh up)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "ASYNC", "PT"]
+ignore = [
+  "S101",   # assert is fine in tests and for internal invariants
+  "S608",   # SQL is assembled from constants and validated identifiers; values are always bound
+  "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "B011"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/pgharbor"]
