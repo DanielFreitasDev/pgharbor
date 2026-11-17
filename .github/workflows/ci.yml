@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --group dev
+      - run: uv run ruff format --check src tests scripts
+      - run: uv run ruff check src tests scripts
+      - run: uv run mypy
+
+  unit:
+    name: Unit (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --group dev --group oracle
+      - run: uv run pytest tests/unit
+
+  integration:
+    name: PostgreSQL ${{ matrix.postgres }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["9.6", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --group dev
+      - name: Start PostgreSQL ${{ matrix.postgres }}
+        run: scripts/pg-matrix.sh up ${{ matrix.postgres }}
+      - name: Start the server with third-party extensions, and PgBouncer
+        if: matrix.postgres == '18'
+        run: |
+          scripts/pg-matrix.sh up extras
+          scripts/pg-matrix.sh up bouncer
+      - name: Start a streaming replica
+        if: matrix.postgres == '17'
+        run: scripts/pg-matrix.sh up standby
+      - run: uv run pytest tests/integration
+
+  platforms:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --group dev
+      - name: Unit tests and the server over stdio
+        run: uv run pytest tests/unit
+      # psycopg needs a selector event loop on Windows, which is not the default there:
+      # only a real connection shows that pgharbor picked the right one.
+      - name: Start the PostgreSQL that ships with the runner
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $service = Get-Service -Name 'postgresql*' | Select-Object -First 1
+          Set-Service -InputObject $service -StartupType Manual
+          Start-Service -InputObject $service
+      - name: Connect to it through pgharbor
+        if: runner.os == 'Windows'
+        env:
+          PGHARBOR_DSN: postgresql://postgres:root@localhost:5432/postgres
+        run: uv run pgharbor check
