@@ -79,6 +79,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S311", "B011", "E501"]
+"scripts/dev/make_assets.py" = ["E501", "RUF028"]
 
 [tool.mypy]
 python_version = "3.11"

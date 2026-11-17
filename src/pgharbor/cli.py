@@ -75,7 +75,23 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("serve", help="run the MCP server on stdio (default)")
     init = sub.add_parser("init", help="write a starter configuration file")
     init.add_argument("--force", action="store_true", help="overwrite an existing file")
-    sub.add_parser("check", help="validate the configuration and test every connection")
+    check = sub.add_parser(
+        "check",
+        help="validate the configuration and test the connections",
+        description="Validate the configuration file and try the connections. Connections "
+        "that need approval (production) are only tried when named or with --all.",
+    )
+    check.add_argument(
+        "connections",
+        nargs="*",
+        metavar="CONNECTION",
+        help="connections to test (default: those that need no approval)",
+    )
+    check.add_argument(
+        "--all",
+        action="store_true",
+        help="also test connections that need approval, such as production",
+    )
     sub.add_parser("tools", help="list the tools this configuration exposes")
     sub.add_parser("config-path", help="print the default configuration file path")
     args = parser.parse_args(argv)
@@ -88,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             return _init(args.force)
         if args.command == "check":
-            return asyncio.run(_check())
+            return asyncio.run(_check(args.connections, args.all))
         if args.command == "tools":
             return _tools()
         if args.command == "config-path":
@@ -128,7 +144,8 @@ def _init(force: bool) -> int:
     return 0
 
 
-async def _check() -> int:
+async def _check(names: list[str], everything: bool) -> int:
+    from .config import Approval
     from .session import Sessions, describe_db_error
 
     config = load_config()
@@ -138,10 +155,22 @@ async def _check() -> int:
     if not config.connections:
         print("  no connection is configured (run `pgharbor init`)")
         return 1
+    for name in names:
+        config.connection(name)  # a clear error for a name that does not exist
     sessions = Sessions(config)
     failures = 0
     try:
         for name, profile in config.connections.items():
+            needs_approval = profile.effective_approval is not Approval.NEVER
+            if names and name not in names:
+                continue
+            if not names and needs_approval and not everything:
+                # Running a check is not a reason to open a production connection.
+                print(
+                    f"  skip  {name:<14} {profile.access.value:<10} needs approval "
+                    f"({profile.environment}); test it with: pgharbor check {name}"
+                )
+                continue
             try:
                 async with sessions.transaction(name) as db:
                     facts = db.facts

@@ -117,22 +117,6 @@ def ask_write(
     )
 
 
-def ask_action(
-    connection: str, action: str, target: str, ctx: Context[Any, Any]
-) -> Elicit[Decision] | NoDialog | NotNeeded:
-    """Resolver for structured administrative tools (maintenance, signalling a backend)."""
-    profile = _profile(connection)
-    if profile is None or profile.write_confirmation is WriteConfirmation.NONE:
-        return NotNeeded()
-    if profile.write_confirmation is WriteConfirmation.CONVERSATION or not client_has_dialog(ctx):
-        return NoDialog()
-    return Elicit(
-        f"Claude wants to run an administrative action on connection '{profile.name}' "
-        f"({profile.environment}: {profile.target()}).\n\nAction: {action}\nTarget: {target}",
-        Decision,
-    )
-
-
 def settle(outcome: Any, *, fallback_allowed: bool, stated_by_agent: bool, what: str) -> str:
     """Turn a resolver outcome into "how it was approved", or raise ``Rejected``.
 

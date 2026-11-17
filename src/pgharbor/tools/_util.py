@@ -2,12 +2,15 @@
 
 from typing import Any
 
+import psycopg
+
 from ..errors import PgHarborError
 from ..lexer import Kind, LexError, tokenize
 from ..session import Db
 
 __all__ = [
     "USER_SCHEMA_FILTER",
+    "attempt",
     "clamp",
     "grid",
     "like_pattern",
@@ -91,6 +94,35 @@ def split_qualified(name: str) -> tuple[str | None, str]:
         f"Invalid object name {name!r}. Use name or schema.name; quote parts that contain "
         'upper case or special characters, as in "MySchema"."My Table".'
     )
+
+
+async def attempt(
+    db: Db, notes: list[str], what: str, sql: str, params: list[Any] | None = None
+) -> list[dict[str, Any]] | None:
+    """Run one part of an answer so that its failure costs only that part.
+
+    Tools that assemble an answer from many catalog queries (an audit, a health check)
+    use this for each of them: when the server refuses one (missing privilege, a view
+    that does not exist in this version), the reason goes into ``notes`` and ``None`` is
+    returned, and the tool carries on with the rest. A savepoint keeps the transaction
+    usable after the error.
+
+    A statement timeout is not swallowed: grinding through twenty more parts at thirty
+    seconds each would be worse than stopping.
+    """
+    await db.rows("SAVEPOINT pgharbor_part")
+    try:
+        rows = await db.rows(sql, params or [])
+    except psycopg.errors.QueryCanceled:
+        raise
+    except psycopg.Error as exc:
+        await db.rows("ROLLBACK TO SAVEPOINT pgharbor_part")
+        await db.rows("RELEASE SAVEPOINT pgharbor_part")
+        reason = exc.diag.message_primary or str(exc).splitlines()[0]
+        notes.append(f"{what} unavailable: {reason}.")
+        return None
+    await db.rows("RELEASE SAVEPOINT pgharbor_part")
+    return rows
 
 
 _RESOLVE_SQL = """

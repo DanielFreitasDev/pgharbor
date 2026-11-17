@@ -223,6 +223,7 @@ class ConnectionConfig(_Model):
     allow_explain_analyze: bool = False
     allow_export: bool = True
     export_dir: str | None = None
+    import_dir: str | None = None
 
     # ---- limits
     statement_timeout: int = 30_000

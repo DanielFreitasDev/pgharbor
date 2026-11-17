@@ -39,7 +39,8 @@ async def test_list_tables_filters_and_orders(app: Any, ready: Server) -> None:
     customers = next(t for t in shop if t["name"] == "customers")
     assert customers["comment"] == "People who buy from the shop"
 
-    biggest = await call(pg_list_tables, connection="ro", order_by="size", limit=1)
+    # Scoped to one schema: other test modules may have scratch tables alive right now.
+    biggest = await call(pg_list_tables, connection="ro", schema="vault", order_by="size", limit=1)
     assert rows_as_dicts(biggest)[0]["name"] == "files"
     assert biggest["has_more"] is True
     assert biggest["next_offset"] == 1

@@ -75,7 +75,15 @@ SELECT json_build_object(
              'src', CASE WHEN n.nspname <> 'pg_catalog' AND l.lanname NOT IN ('c', 'internal')
                          THEN left(p.prosrc, {max_source}) END,
              'srclen', CASE WHEN n.nspname <> 'pg_catalog' AND l.lanname NOT IN ('c', 'internal')
-                            THEN length(p.prosrc) END)), '[]'::json)
+                            THEN length(p.prosrc) END,
+             'support', CASE WHEN n.nspname <> 'pg_catalog' THEN (
+                 SELECT json_agg(DISTINCT sp.proname)
+                   FROM pg_catalog.pg_aggregate a
+                   JOIN pg_catalog.pg_proc sp ON sp.oid = ANY (ARRAY[
+                        a.aggtransfn::oid, a.aggfinalfn::oid, a.aggcombinefn::oid,
+                        a.aggserialfn::oid, a.aggdeserialfn::oid, a.aggmtransfn::oid,
+                        a.aggminvtransfn::oid, a.aggmfinalfn::oid])
+                  WHERE a.aggfnoid = p.oid) END)), '[]'::json)
       FROM pg_catalog.pg_proc p
       JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
       JOIN pg_catalog.pg_language l ON l.oid = p.prolang
@@ -122,12 +130,13 @@ SELECT json_build_object(
          OR EXISTS (SELECT 1 FROM pg_catalog.pg_cast ca
                       JOIN pg_catalog.pg_proc p ON p.oid = ca.castfunc
                      WHERE ca.casttarget = t.oid AND p.provolatile = 'v'))),
-  'volatile_operators', (
-    SELECT coalesce(json_agg(DISTINCT o.oprname), '[]'::json)
+  'operators', (
+    SELECT coalesce(json_agg(json_build_object(
+             'op', o.oprname, 'fn', p.proname, 'vol', p.provolatile)), '[]'::json)
       FROM pg_catalog.pg_operator o
       JOIN pg_catalog.pg_namespace n ON n.oid = o.oprnamespace
       JOIN pg_catalog.pg_proc p ON p.oid = o.oprcode
-     WHERE n.nspname <> 'pg_catalog' AND p.provolatile = 'v')
+     WHERE n.nspname <> 'pg_catalog')
 ) AS probe
 """.replace("{max_source}", str(_MAX_SOURCE_CHARS))
 
@@ -222,11 +231,13 @@ async def vet_statement(db: Db, analysis: Analysis, *, read_only: bool) -> Vetti
         checked_calls |= set(ask_functions)
         checked_names |= set(ask_names)
 
-        if round_number == 1 and not permissive:
-            _check_operators_and_types(probe, analysis)
-
         new_calls: set[str] = set()
         new_names: set[str] = set()
+        if round_number == 1:
+            # A custom operator is a function call in disguise: judge the function too.
+            for function_name in _check_operators_and_types(probe, analysis, permissive):
+                contexts.setdefault(function_name, "an operator used by the statement")
+                new_calls.add(function_name)
 
         for function in probe["functions"]:
             oid = function["oid"]
@@ -240,6 +251,10 @@ async def vet_statement(db: Db, analysis: Analysis, *, read_only: bool) -> Vetti
             vetting.functions[oid] = function
             where = contexts.get(name, "the statement")
             _judge_function(function, profile, read_only=read_only, where=where)
+            # An aggregate runs its support functions; they are judged like direct calls.
+            for support in function.get("support") or ():
+                contexts.setdefault(support, f"aggregate {function['schema']}.{name}()")
+                new_calls.add(support)
             body = _body_to_scan(function, profile, read_only=read_only, where=where)
             if body is not None:
                 label = f"function {function['schema']}.{name}()"
@@ -287,17 +302,22 @@ async def vet_statement(db: Db, analysis: Analysis, *, read_only: bool) -> Vetti
     )
 
 
+def _in(where: str) -> str:
+    """Where a name was found, for messages. Nothing to add for the statement itself."""
+    return "" if where == "the statement" else f" ({where})"
+
+
 def _refuse_by_name(name: str, *, read_only: bool, where: str) -> None:
     if is_always_denied(name):
         raise Rejected(
-            f"{name}() is not allowed ({where}): it can act outside the database or change "
+            f"{name}() is not allowed{_in(where)}: it can act outside the database or change "
             "the session, even inside a read-only transaction",
             rule="function-denied",
             hint="pgharbor has dedicated tools for server information; see pg_server_info.",
         )
     if read_only and is_denied_when_read_only(name):
         raise Rejected(
-            f"{name}() has a side effect and this connection is read-only ({where})",
+            f"{name}() has a side effect and this connection is read-only{_in(where)}",
             rule="function-side-effect",
         )
 
@@ -310,7 +330,7 @@ def _judge_function(
 
     if _matches(profile.deny_functions, schema, name):
         raise Rejected(
-            f"{qualified}() is listed in deny_functions for this connection ({where})",
+            f"{qualified}() is listed in deny_functions for this connection{_in(where)}",
             rule="function-denied-by-config",
         )
     _refuse_by_name(name, read_only=read_only, where=where)
@@ -323,21 +343,22 @@ def _judge_function(
     if builtin:
         if volatility == "v" and not is_safe_volatile(name):
             raise Rejected(
-                f"{name}() is a VOLATILE built-in function that is not on the safe list ({where})",
+                f"{name}() is a VOLATILE built-in function that is not on the safe list"
+                f"{_in(where)}",
                 rule="function-volatile",
             )
         return
 
     if profile.function_policy is FunctionPolicy.STRICT:
         raise Rejected(
-            f'{qualified}() is not a built-in function and function_policy is "strict" ({where})',
+            f'{qualified}() is not a built-in function and function_policy is "strict"{_in(where)}',
             rule="function-not-allowed",
             hint=f'Add "{qualified}" to allow_functions in the connection profile if it is safe.',
         )
     if volatility == "v" and not is_safe_volatile(name, builtin=False):
         raise Rejected(
             f"{qualified}() is declared VOLATILE, so it may change data or state, and this "
-            f"connection is read-only ({where})",
+            f"connection is read-only{_in(where)}",
             rule="function-volatile",
             hint=f'If it only reads, add "{qualified}" to allow_functions in the '
             "connection profile.",
@@ -358,14 +379,14 @@ def _body_to_scan(
     hint = f'If it is safe, add "{qualified}" to allow_functions in the connection profile.'
     if function["lang"] not in _SCANNABLE_LANGUAGES:
         raise Rejected(
-            f"{qualified}() is written in {function['lang']}, which pgharbor cannot inspect "
-            f"({where})",
+            f"{qualified}() is written in {function['lang']}, which pgharbor cannot inspect"
+            f"{_in(where)}",
             rule="function-unverifiable",
             hint=hint,
         )
     if (function.get("srclen") or 0) > _MAX_SOURCE_CHARS:
         raise Rejected(
-            f"{qualified}() is too long to inspect ({where})",
+            f"{qualified}() is too long to inspect{_in(where)}",
             rule="function-unverifiable",
             hint=hint,
         )
@@ -399,17 +420,32 @@ def _scan_text(
     return calls, names
 
 
-def _check_operators_and_types(probe: dict[str, Any], analysis: Analysis) -> None:
-    for operator in probe["volatile_operators"]:
-        if any(operator in used for used in analysis.operators):
+def _check_operators_and_types(
+    probe: dict[str, Any], analysis: Analysis, permissive: bool
+) -> set[str]:
+    """Refuse volatile custom operators and casts; return the functions behind the
+    custom operators the statement may be using, to be judged like direct calls.
+
+    Operators are matched by text: an operator defined by an extension under a common
+    name (``=``, ``&&``) is considered used whenever that text appears. That costs one
+    more catalog lookup and can only make the check stricter.
+    """
+    functions: set[str] = set()
+    for operator in probe["operators"]:
+        if not any(operator["op"] in used for used in analysis.operators):
+            continue
+        if operator["vol"] == "v" and not permissive:
             raise Rejected(
-                f"the operator {operator} is implemented by a VOLATILE function",
+                f"the operator {operator['op']} is implemented by the VOLATILE function "
+                f"{operator['fn']}()",
                 rule="operator-volatile",
             )
-    if probe["volatile_types"]:
+        functions.add(operator["fn"])
+    if probe["volatile_types"] and not permissive:
         raise Rejected(
             "the type "
             + ", ".join(sorted(probe["volatile_types"]))
             + " converts values through a VOLATILE function",
             rule="type-volatile",
         )
+    return functions

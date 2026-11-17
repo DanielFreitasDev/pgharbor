@@ -45,6 +45,7 @@ __all__ = [
     "QueryResult",
     "estimate_plan",
     "explain_statement",
+    "plain_result",
     "run_query",
     "validate_statement",
 ]
@@ -124,9 +125,9 @@ async def run_query(
     analysis = analyze(sql, max_chars=profile.max_sql_chars)
 
     if analysis.kind == "show":
-        result = await _run_show(db, analysis)
-        result.elapsed_ms = watch.ms
-        return result
+        shown = await _run_show(db, analysis)
+        shown.elapsed_ms = watch.ms
+        return shown
     _require_query(analysis, profile)
     _check_params(analysis, params)
 
@@ -681,6 +682,31 @@ def _build_result(
     if scrubbed:
         notes.append(f"{scrubbed} value(s) contained embedded credentials, replaced by {REDACTED}.")
     return QueryResult(columns=columns, rows=rows, has_more=has_more, notes=notes)
+
+
+def plain_result(result: Any, *, limit: int, cell: int) -> tuple[list[str], list[list[Any]], bool]:
+    """Rows of a result that was not wrapped (``RETURNING`` of a write, for instance).
+
+    Returns column names, at most ``limit`` rows with values cut at ``cell`` characters
+    and credentials scrubbed, and whether rows were left out.
+    """
+    count = result.nfields
+    names = [_text(result.fname(i)) or "?column?" for i in range(count)]
+    types = [result.ftype(i) for i in range(count)]
+    rows: list[list[Any]] = []
+    for r in range(min(result.ntuples, limit)):
+        row: list[Any] = []
+        for c in range(count):
+            raw = result.get_value(r, c)
+            if raw is None:
+                row.append(None)
+                continue
+            text = raw.decode("utf-8", errors="replace")
+            clipped = len(text) > cell
+            value = _convert(text[:cell] + "…" if clipped else text, types[c], clipped)
+            row.append(scrub(value) if isinstance(value, str) else value)
+        rows.append(row)
+    return names, rows, result.ntuples > limit
 
 
 def _convert(text: str, type_oid: int, clipped: bool) -> Any:

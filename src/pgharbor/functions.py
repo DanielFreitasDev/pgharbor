@@ -269,6 +269,7 @@ SAFE_VOLATILE: frozenset[str] = frozenset(
         "pg_get_wal_resource_managers",
         "pg_get_wal_summarizer_state",
         "pg_available_wal_summaries",
+        "pg_wal_summary_contents",
         # locks and activity
         "pg_blocking_pids",
         "pg_safe_snapshot_blocking_pids",

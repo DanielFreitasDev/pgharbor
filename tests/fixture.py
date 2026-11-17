@@ -10,7 +10,7 @@ stored version differs.
 
 from __future__ import annotations
 
-FIXTURE_VERSION = "8"
+FIXTURE_VERSION = "9"
 DATABASE = "pgharbor_test"
 LIMITED_ROLE = "harbor_ro"
 LIMITED_PASSWORD = "harbor_ro_pw"
@@ -318,6 +318,25 @@ def statements(v: int) -> list[str]:
         CREATE FUNCTION trap.volatile_op(int, int) RETURNS boolean
         LANGUAGE sql VOLATILE AS $$ SELECT nextval('trap.counter') > 0 $$""")
     add("CREATE OPERATOR trap.@@@ (LEFTARG = int, RIGHTARG = int, PROCEDURE = trap.volatile_op)")
+
+    # An aggregate is only as safe as its state function, and an operator as the function
+    # behind it. Both of these hide a session lock behind an innocent-looking call.
+    add("""
+        CREATE FUNCTION trap.agg_state(int, int) RETURNS int
+        LANGUAGE sql IMMUTABLE AS $$
+            SELECT coalesce($1, 0) + $2 + (pg_try_advisory_lock(424243))::int $$""")
+    add("CREATE AGGREGATE trap.sneaky_sum(int) (SFUNC = trap.agg_state, STYPE = int)")
+    add("""
+        CREATE FUNCTION trap.lying_op(int, int) RETURNS boolean
+        LANGUAGE sql IMMUTABLE AS $$ SELECT pg_try_advisory_lock(424244) $$""")
+    add("CREATE OPERATOR trap.=== (LEFTARG = int, RIGHTARG = int, PROCEDURE = trap.lying_op)")
+    # Honest counterparts, which must keep working.
+    add("""
+        CREATE AGGREGATE shop.sum_qty(int) (SFUNC = int4pl, STYPE = int, INITCOND = '0')""")
+    add("""
+        CREATE FUNCTION shop.same_parity(int, int) RETURNS boolean
+        LANGUAGE sql IMMUTABLE AS $$ SELECT $1 % 2 = $2 % 2 $$""")
+    add("CREATE OPERATOR shop.~~~ (LEFTARG = int, RIGHTARG = int, PROCEDURE = shop.same_parity)")
 
     add("ANALYZE")
     return out

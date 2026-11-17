@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import tempfile
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
@@ -27,6 +28,15 @@ from pgharbor.config import Config
 from pgharbor.session import Sessions
 
 from . import fixture
+
+# The suite must never read the developer's own pgharbor configuration (which may point
+# at real databases) nor pick up a database from the environment.
+_ISOLATED_CONFIG_HOME = tempfile.mkdtemp(prefix="pgharbor-tests-")
+os.environ["XDG_CONFIG_HOME"] = _ISOLATED_CONFIG_HOME
+os.environ["XDG_STATE_HOME"] = _ISOLATED_CONFIG_HOME
+for _name in ("PGHARBOR_CONFIG", "PGHARBOR_DSN", "DATABASE_URL", "PGHARBOR_ACCESS",
+              "PGHARBOR_ENVIRONMENT"):  # fmt: skip
+    os.environ.pop(_name, None)
 
 HOST = os.environ.get("PGHARBOR_TEST_HOST", "127.0.0.1")
 PASSWORD = os.environ.get("PGHARBOR_TEST_PASSWORD", "pgharbor")
@@ -245,6 +255,36 @@ async def sessions(ready: Server) -> AsyncIterator[Sessions]:
         yield manager
     finally:
         await manager.close()
+
+
+@pytest.fixture(scope="session")
+def one_server() -> Server:
+    """One server for tests that do not depend on the PostgreSQL version."""
+    if not SERVERS:
+        pytest.skip("no test server; run scripts/pg-matrix.sh up")
+    preferred = next((s for s in SERVERS if s.label == "18"), SERVERS[-1])
+    ensure_fixture(preferred)
+    return preferred
+
+
+def write_config_file(path: Any, server: Server, **overrides: Any) -> Any:
+    """Write a TOML configuration file with the suite's profiles; returns ``path``."""
+    lines = ["[audit]", "enabled = false", ""]
+    connections = {
+        "ro": {},
+        "rw": {"access": "read-write", "write_confirmation": "none"},
+        "prod": {"environment": "production"},
+    }
+    connections.update(overrides)
+    for name, extra in connections.items():
+        body = {**profile(server, name), **extra}
+        body.pop("name")
+        lines.append(f"[connections.{name}]")
+        for key, value in body.items():
+            lines.append(f"{key} = {json.dumps(value)}")
+        lines.append("")
+    path.write_text("\n".join(lines))
+    return path
 
 
 @pytest.fixture(scope="session")

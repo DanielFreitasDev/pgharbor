@@ -276,6 +276,10 @@ def _collect(analysis: Analysis) -> None:
         quoted = token.kind is Kind.QIDENT
         analysis.names |= name_variants(token.value, quoted)
         after_dot = i >= 1 and tokens[i - 1].is_punct(".")
+        if i >= 1 and tokens[i - 1].is_word("tablesample"):
+            # TABLESAMPLE SYSTEM (10): the name is a sampling method, resolved by the server
+            # only among C-language handler functions. It is not a function call.
+            continue
         if i < last and tokens[i + 1].is_punct("("):
             schema = None
             if after_dot and i >= 2 and tokens[i - 2].is_name:

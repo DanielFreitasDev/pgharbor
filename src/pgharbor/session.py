@@ -127,6 +127,9 @@ class Db:
         self.read_only = read_only
         self._conn = conn
         self.statements = 0
+        # Set by a tool that wants its changes discarded (a dry run): the transaction
+        # then ends in ROLLBACK even though no error happened.
+        self.rollback_only = False
 
     # ------------------------------------------------------------------ server facts
 
@@ -166,7 +169,7 @@ class Db:
         """Run SQL written by pgharbor itself. Values always travel as parameters."""
         self.statements += 1
         async with psycopg.AsyncRawCursor(self._conn, row_factory=dict_row) as cur:
-            await cur.execute(sql, _adapt_params(params) or None)  # type: ignore[arg-type]
+            await cur.execute(sql, _adapt_params(params) or None)
             if cur.description is None:
                 return []
             return await cur.fetchall()
@@ -193,11 +196,26 @@ class Db:
         bound = [*_adapt_params(params), _PROTOCOL_SENTINEL]
         self.statements += 1
         async with psycopg.AsyncRawCursor(self._conn) as cur:
-            await cur.execute(sql, bound)  # type: ignore[arg-type]
+            await cur.execute(sql, bound)
             result = cur.pgresult
             if result is None:  # pragma: no cover - execute() always leaves a result
                 raise PgHarborError("the server returned no result")
             return result
+
+    async def copy_in(self, sql: str, chunks: AsyncIterator[bytes]) -> int:
+        """Feed ``COPY ... FROM STDIN`` and return the number of rows loaded.
+
+        ``sql`` must be built by pgharbor from catalog names and validated options; this
+        method is not for statements written by the agent.
+        """
+        if self.read_only:
+            raise AssertionError("copy_in needs a write transaction")
+        self.statements += 1
+        async with self._conn.cursor() as cur:
+            async with cur.copy(sql) as copy:
+                async for chunk in chunks:
+                    await copy.write(chunk)
+            return cur.rowcount
 
     @property
     def encoding(self) -> str:
@@ -401,7 +419,41 @@ class Sessions:
             except BaseException:
                 reusable = await _finish(conn, commit=False)
                 raise
-            reusable = await _finish(conn, commit=write)
+            reusable = await _finish(conn, commit=write and not db.rollback_only)
+        finally:
+            await pool.put(conn, reusable=reusable)
+
+    @contextlib.asynccontextmanager
+    async def autocommit(
+        self, name: str | None, *, timeout_ms: int | None = None
+    ) -> AsyncIterator[Db]:
+        """A session with no transaction block, for the few commands that refuse one.
+
+        ``VACUUM``, ``CREATE INDEX CONCURRENTLY``, ``ALTER SYSTEM`` and a handful of others
+        cannot run inside ``BEGIN``. Only the administrative tools use this, and only on a
+        profile whose ``access`` is ``admin``. Every statement commits on its own, so there
+        is nothing to roll back and no dry run. The session is wiped afterwards like any
+        other.
+        """
+        profile = self.profile(name)
+        if profile.access.rank < 2:
+            raise Rejected(
+                f"connection '{profile.name}' is not an admin connection",
+                rule="access-mode",
+            )
+        pool = self._pools.get(profile.name)
+        if pool is None:
+            pool = self._pools[profile.name] = _Pool(profile)
+        conn = await pool.get()
+        reusable = False
+        try:
+            facts = await self._facts_for(profile, conn)
+            await conn.execute(_autocommit_sql(profile, timeout_ms=timeout_ms))
+            db = Db(profile, facts, conn, read_only=False)
+            try:
+                yield db
+            finally:
+                reusable = await _finish(conn, commit=False)
         finally:
             await pool.put(conn, reusable=reusable)
 
@@ -460,6 +512,19 @@ def _begin_sql(profile: ConnectionConfig, *, write: bool, timeout_ms: int | None
         " current_setting('default_transaction_read_only') AS dtro,"
         " current_setting('standard_conforming_strings') AS scs"
     )
+    return "; ".join(parts)
+
+
+def _autocommit_sql(profile: ConnectionConfig, *, timeout_ms: int | None) -> str:
+    """Session settings for the no-transaction path. ``DISCARD ALL`` undoes them."""
+    parts = [
+        "SET default_transaction_read_only = off",
+        f"SET statement_timeout = {int(timeout_ms or profile.statement_timeout)}",
+        f"SET lock_timeout = {int(profile.lock_timeout)}",
+        "SET standard_conforming_strings = on",
+    ]
+    if profile.role:
+        parts.append(f"SET ROLE {quote_ident(profile.role)}")
     return "; ".join(parts)
 
 
