@@ -68,7 +68,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        # Intel on purpose: GitHub's arm64 macOS runners are short of capacity, and a job
+        # that waits 15 minutes for one is cancelled and turns the whole run red.
+        # pgharbor is pure Python, so the architecture does not change what is tested.
+        os: [macos-15-intel, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
