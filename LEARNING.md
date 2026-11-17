@@ -9,6 +9,7 @@ Leia as entradas relacionadas à tarefa. Os detalhes ficam em `docs/learning/`.
 
 - [SQL montado em tempo de execução dentro de função](docs/learning/bug-sql-dinamico-em-funcao.md) — `EXECUTE` com texto colado escapava da conferência e do plano; função assim é recusada como não verificável.
 - [Código que roda sem ser citado: tipo, conversão, domínio e operador](docs/learning/bug-codigo-pendurado-em-tipo-e-operador.md) — cast com função, `CHECK` de domínio e operador escrito dentro de view executavam código que ninguém conferia.
+- [Resposta longa chegava como JSON cortado no meio](docs/learning/bug-resposta-cortada-no-meio-do-json.md) — o orçamento de linhas era maior que o teto geral de saída; o teto agora tira linhas inteiras.
 
 ## Pegadinhas de ambiente, dependências e bibliotecas
 
@@ -23,6 +24,7 @@ Leia as entradas relacionadas à tarefa. Os detalhes ficam em `docs/learning/`.
 
 - [Operador de extensão casa por texto](docs/learning/gotcha-operador-de-extensao-casa-por-texto.md) — com PostGIS ou pgvector, todo `=` arrastava uma cadeia de checagens; só operador sobre tipo embutido casa por texto.
 - [Container não lê o arquivo de configuração privado](docs/learning/gotcha-docker-arquivo-de-configuracao-600.md) — o `config.toml` montado é 600 do usuário do host; rodar com `--user`.
+- [Docstring guarda o recuo antes do Python 3.13](docs/learning/gotcha-docstring-com-recuo-antes-do-python-313.md) — descrição de ferramenta e referência gerada mudavam conforme a versão; usar `inspect.cleandoc` e montar tipos pela estrutura.
 
 ## Decisões de arquitetura
 
