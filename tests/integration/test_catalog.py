@@ -126,7 +126,7 @@ async def test_list_sequences(app: Any, ready: Server) -> None:
 
 async def test_list_views_matviews_and_types(app: Any) -> None:
     views = {r["name"]: r for r in await listing(kind="view", schema="shop")}
-    assert set(views) == {"order_summary", "customers_public"}
+    assert set(views) == {"order_summary", "customers_public", "parity_view"}
     assert views["order_summary"]["columns"] == 6
     assert views["order_summary"]["comment"] == "One row per order with customer name"
     matviews = await listing(kind="materialized_view", schema="analytics")
@@ -134,7 +134,13 @@ async def test_list_views_matviews_and_types(app: Any) -> None:
     assert matviews[0]["size"]
 
     types = {r["name"]: r["kind"] for r in await listing(kind="type", schema="shop")}
-    assert types == {"order_status": "enum", "email": "domain", "address": "composite"}
+    assert types == {
+        "order_status": "enum",
+        "email": "domain",
+        "address": "composite",
+        "money_tag": "composite",
+        "sku_code": "domain",
+    }
     enums = await listing(kind="enum", schema="shop")
     assert enums[0]["labels"] == ["new", "paid", "shipped", "cancelled"]
     domains = await listing(kind="domain", schema="shop")
@@ -183,10 +189,11 @@ async def test_list_policies_extensions_and_instance_objects(app: Any, ready: Se
 
     operators = await listing(kind="operator", schema="trap")
     assert [(r["name"], r["left"], r["right"]) for r in operators] == [
+        ("=", "trap.tagged", "trap.tagged"),
         ("===", "integer", "integer"),
         ("@@@", "integer", "integer"),
     ]
-    assert operators[1]["function"] == "trap.volatile_op"
+    assert operators[2]["function"] == "trap.volatile_op"
 
     casts = await listing(kind="cast", pattern="bigint")
     assert any(r["source"] == "bigint" and r["target"] == "integer" for r in casts)
@@ -503,9 +510,9 @@ async def test_describe_index_trigger_extension_schema(app: Any, ready: Server) 
     schema = await call(pg_describe_object, name="shop", kind="schema", connection="ro")
     assert schema["comment"] == "Online shop: customers, products and orders"
     assert schema["objects"]["tables"] >= 7
-    assert schema["objects"]["views"] == 2
+    assert schema["objects"]["views"] == 3
     assert schema["objects"]["functions"] >= 5
-    assert schema["objects"]["types"] == 3
+    assert schema["objects"]["types"] == 5
     assert schema["owner"]
 
 

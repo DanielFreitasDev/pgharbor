@@ -10,7 +10,7 @@ stored version differs.
 
 from __future__ import annotations
 
-FIXTURE_VERSION = "9"
+FIXTURE_VERSION = "14"
 DATABASE = "pgharbor_test"
 LIMITED_ROLE = "harbor_ro"
 LIMITED_PASSWORD = "harbor_ro_pw"
@@ -330,13 +330,118 @@ def statements(v: int) -> list[str]:
         CREATE FUNCTION trap.lying_op(int, int) RETURNS boolean
         LANGUAGE sql IMMUTABLE AS $$ SELECT pg_try_advisory_lock(424244) $$""")
     add("CREATE OPERATOR trap.=== (LEFTARG = int, RIGHTARG = int, PROCEDURE = trap.lying_op)")
+    # SQL built at run time: nothing in these bodies says what they will read or call.
+    # The first is the helper every database seems to have; the others glue the text
+    # from pieces, so that no pattern over the strings can recognise it.
+    add("""
+        CREATE FUNCTION trap.count_rows(tbl text) RETURNS bigint
+        LANGUAGE plpgsql STABLE AS $$
+        DECLARE n bigint;
+        BEGIN
+            EXECUTE 'SELECT count(*) FROM ' || tbl INTO n;
+            RETURN n;
+        END $$""")
+    add("""
+        CREATE FUNCTION trap.glued_key(i int) RETURNS text
+        LANGUAGE plpgsql STABLE AS $$
+        DECLARE k text;
+        BEGIN
+            EXECUTE 'SELECT access' || '_key FROM vault.' || 'files WHERE id = $1' INTO k USING i;
+            RETURN k;
+        END $$""")
+    add("""
+        CREATE FUNCTION trap.glued_lock() RETURNS boolean
+        LANGUAGE plpgsql STABLE AS $$
+        DECLARE ok boolean;
+        BEGIN
+            EXECUTE 'SELECT pg_try_advisory' || '_lock(424245)' INTO ok;
+            RETURN ok;
+        END $$""")
+    add("""
+        CREATE FUNCTION trap.run_sql(q text) RETURNS SETOF text
+        LANGUAGE plpgsql STABLE AS $$ BEGIN RETURN QUERY EXECUTE q; END $$""")
+    add("""
+        CREATE FUNCTION trap.loops_over_sql(q text) RETURNS bigint
+        LANGUAGE plpgsql STABLE AS $$
+        DECLARE r record; n bigint := 0;
+        BEGIN
+            FOR r IN EXECUTE q LOOP n := n + 1; END LOOP;
+            RETURN n;
+        END $$""")
+    add("""
+        CREATE FUNCTION trap.wraps_dynamic() RETURNS bigint
+        LANGUAGE sql STABLE AS $$ SELECT trap.count_rows('vault.files') $$""")
+
+    # Code attached to a type runs without being named by the statement: the function
+    # behind a cast, the CHECK of a domain (also when a value becomes an argument of
+    # that type) and the function behind an operator of the type.
+    add("CREATE TYPE trap.wrapped AS (v text)")
+    add("""
+        CREATE FUNCTION trap.to_wrapped(int) RETURNS trap.wrapped
+        LANGUAGE sql STABLE AS $$
+            SELECT ROW((SELECT access_key FROM vault.files WHERE id = $1))::trap.wrapped $$""")
+    add("CREATE CAST (int AS trap.wrapped) WITH FUNCTION trap.to_wrapped(int)")
+    add("CREATE TYPE trap.sticky AS (v int)")
+    add("""
+        CREATE FUNCTION trap.to_sticky(int) RETURNS trap.sticky
+        LANGUAGE sql IMMUTABLE AS $$
+            SELECT ROW($1 + (pg_try_advisory_lock(424246))::int)::trap.sticky $$""")
+    add("CREATE CAST (int AS trap.sticky) WITH FUNCTION trap.to_sticky(int)")
+    add("""
+        CREATE FUNCTION trap.locking_check(int) RETURNS boolean
+        LANGUAGE sql IMMUTABLE AS $$ SELECT pg_try_advisory_lock(424247) $$""")
+    add("CREATE DOMAIN trap.checked AS int CHECK (trap.locking_check(VALUE))")
+    add("""
+        CREATE FUNCTION trap.takes_checked(d trap.checked) RETURNS int
+        LANGUAGE sql STABLE AS $$ SELECT d + 0 $$""")
+    add("CREATE TYPE trap.holder AS (c trap.checked)")
+    add("CREATE TYPE trap.tagged AS (v int)")
+    add("""
+        CREATE FUNCTION trap.tagged_eq(trap.tagged, trap.tagged) RETURNS boolean
+        LANGUAGE sql IMMUTABLE AS $$ SELECT pg_try_advisory_lock(424248) $$""")
+    add("""
+        CREATE OPERATOR trap.= (
+            LEFTARG = trap.tagged, RIGHTARG = trap.tagged, PROCEDURE = trap.tagged_eq)""")
+    add("CREATE TABLE trap.tagged_rows (id int PRIMARY KEY, t trap.tagged)")
+    add("INSERT INTO trap.tagged_rows VALUES (1, ROW(1)), (2, ROW(2))")
+
+    # A custom operator is a call nobody sees when it is written inside something else.
+    add("CREATE VIEW trap.view_with_operator AS SELECT 1 OPERATOR(trap.===) 2 AS locked")
+    add("""
+        CREATE FUNCTION trap.uses_operator() RETURNS boolean
+        LANGUAGE sql STABLE AS $$ SELECT 1 OPERATOR(trap.===) 2 $$""")
+    add("""
+        CREATE FUNCTION trap.uses_operator_plpgsql() RETURNS boolean
+        LANGUAGE plpgsql STABLE AS $$ BEGIN RETURN 1 OPERATOR(trap.===) 2; END $$""")
+    add("CREATE DOMAIN trap.checked_by_operator AS int CHECK (VALUE OPERATOR(trap.===) 2)")
+
     # Honest counterparts, which must keep working.
+    add("""
+        CREATE FUNCTION shop.label_of(i int) RETURNS text
+        LANGUAGE plpgsql STABLE AS $$
+        DECLARE found text;
+        BEGIN
+            SELECT name INTO found FROM shop.products WHERE id = i;
+            RETURN coalesce(found, 'none');
+        END $$""")
+    add("CREATE TYPE shop.money_tag AS (amount numeric, currency text)")
+    add("""
+        CREATE FUNCTION shop.to_money_tag(numeric) RETURNS shop.money_tag
+        LANGUAGE sql IMMUTABLE AS $$ SELECT ROW($1, 'USD')::shop.money_tag $$""")
+    add("CREATE CAST (numeric AS shop.money_tag) WITH FUNCTION shop.to_money_tag(numeric)")
+    add("""
+        CREATE FUNCTION shop.is_sku(text) RETURNS boolean
+        LANGUAGE sql IMMUTABLE AS $$ SELECT $1 ~ '^[A-Z]+-[0-9]+$' $$""")
+    add("CREATE DOMAIN shop.sku_code AS text CHECK (shop.is_sku(VALUE))")
     add("""
         CREATE AGGREGATE shop.sum_qty(int) (SFUNC = int4pl, STYPE = int, INITCOND = '0')""")
     add("""
         CREATE FUNCTION shop.same_parity(int, int) RETURNS boolean
         LANGUAGE sql IMMUTABLE AS $$ SELECT $1 % 2 = $2 % 2 $$""")
     add("CREATE OPERATOR shop.~~~ (LEFTARG = int, RIGHTARG = int, PROCEDURE = shop.same_parity)")
+    add("""
+        CREATE VIEW shop.parity_view AS
+        SELECT id, id::int OPERATOR(shop.~~~) 2 AS even FROM shop.orders""")
 
     add("ANALYZE")
     return out

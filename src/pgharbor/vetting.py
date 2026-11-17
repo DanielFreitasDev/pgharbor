@@ -36,7 +36,7 @@ from .session import Db
 
 __all__ = ["SECRET_CATALOGS", "Vetting", "relation_denied", "vet_statement"]
 
-_MAX_ROUNDS = 5
+_MAX_ROUNDS = 8
 _MAX_SOURCE_CHARS = 200_000
 _SCANNABLE_LANGUAGES = frozenset({"sql", "plpgsql"})
 _SYSTEM_SCHEMAS = frozenset({"pg_catalog", "information_schema"})
@@ -87,11 +87,11 @@ SELECT json_build_object(
       FROM pg_catalog.pg_proc p
       JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
       JOIN pg_catalog.pg_language l ON l.oid = p.prolang
-     WHERE p.proname = ANY($1::text[])),
+     WHERE p.proname = ANY($1::name[])),
   'relations', (
     WITH RECURSIVE tree(oid) AS (
         SELECT c.oid FROM pg_catalog.pg_class c
-         WHERE c.relname = ANY($2::text[]) AND c.relkind IN ('r', 'v', 'm', 'f', 'p')
+         WHERE c.relname = ANY($2::name[]) AND c.relkind IN ('r', 'v', 'm', 'f', 'p')
         UNION
         SELECT d.refobjid
           FROM tree t
@@ -124,19 +124,122 @@ SELECT json_build_object(
     SELECT coalesce(json_agg(DISTINCT t.typname), '[]'::json)
       FROM pg_catalog.pg_type t
       JOIN pg_catalog.pg_namespace tn ON tn.oid = t.typnamespace
-     WHERE t.typname = ANY($2::text[]) AND tn.nspname <> 'pg_catalog'
+     WHERE t.typname = ANY($2::name[]) AND tn.nspname <> 'pg_catalog'
        AND (EXISTS (SELECT 1 FROM pg_catalog.pg_proc p
                      WHERE p.oid = t.typinput AND p.provolatile = 'v')
          OR EXISTS (SELECT 1 FROM pg_catalog.pg_cast ca
                       JOIN pg_catalog.pg_proc p ON p.oid = ca.castfunc
                      WHERE ca.casttarget = t.oid AND p.provolatile = 'v'))),
+  'types', (
+    WITH RECURSIVE reach(oid) AS (
+        -- Types the statement names (a table name is also the name of its row type)
+        -- and types in the signatures of the functions it calls...
+        SELECT seed.oid
+          FROM (SELECT t.oid FROM pg_catalog.pg_type t WHERE t.typname = ANY($2::name[])
+                UNION ALL
+                SELECT sig.oid
+                  FROM pg_catalog.pg_proc p
+                 CROSS JOIN LATERAL unnest(p.proargtypes::oid[] || p.prorettype) AS sig(oid)
+                 WHERE p.proname = ANY($3::name[])) seed
+         -- Looked up one by one: the seeds are few, and a join here makes the planner
+         -- read the whole of pg_type on databases with thousands of tables.
+         WHERE (SELECT sn.nspname
+                  FROM pg_catalog.pg_type st
+                  JOIN pg_catalog.pg_namespace sn ON sn.oid = st.typnamespace
+                 WHERE st.oid = seed.oid) NOT IN ('pg_catalog', 'information_schema')
+        UNION
+        -- ...and what those are made of: base of a domain, element of an array,
+        -- columns of a row type, subtype of a range. Every branch starts from the
+        -- reached type, so that the planner cannot decide to visit all types first.
+        SELECT mt.oid
+          FROM reach r
+         CROSS JOIN LATERAL (
+                SELECT t.typbasetype FROM pg_catalog.pg_type t
+                 WHERE t.oid = r.oid AND t.typtype = 'd'
+                UNION ALL
+                SELECT t.typelem FROM pg_catalog.pg_type t
+                 WHERE t.oid = r.oid AND t.typcategory = 'A' AND t.typelem <> 0
+                UNION ALL
+                SELECT a.atttypid
+                  FROM pg_catalog.pg_type t
+                  JOIN pg_catalog.pg_attribute a ON a.attrelid = t.typrelid
+                 WHERE t.oid = r.oid AND t.typrelid <> 0
+                   AND a.attnum > 0 AND NOT a.attisdropped
+                UNION ALL
+                SELECT rg.rngsubtype FROM pg_catalog.pg_range rg WHERE rg.rngtypid = r.oid
+              ) AS member(oid)
+          JOIN pg_catalog.pg_type mt ON mt.oid = member.oid
+          JOIN pg_catalog.pg_namespace mn ON mn.oid = mt.typnamespace
+         WHERE mn.nspname NOT IN ('pg_catalog', 'information_schema')
+    )
+    -- Only the types that carry code written in the database are returned.
+    SELECT coalesce(json_agg(json_build_object(
+             'oid', coded.oid::int8, 'schema', coded.nspname, 'name', coded.typname,
+             'functions', coded.names, 'checks', coded.source)), '[]'::json)
+      FROM (
+        SELECT r.oid, tn.nspname, t.typname, hooks.names, checks.source
+          FROM (SELECT x.oid, (SELECT nullif(xt.typarray, 0) FROM pg_catalog.pg_type xt
+                                WHERE xt.oid = x.oid) AS arr
+                  FROM reach x OFFSET 0) r
+          JOIN pg_catalog.pg_type t ON t.oid = r.oid
+          JOIN pg_catalog.pg_namespace tn ON tn.oid = t.typnamespace
+         CROSS JOIN LATERAL (
+                SELECT json_agg(DISTINCT hp.proname) AS names
+                  FROM (SELECT ca.castfunc AS fn FROM pg_catalog.pg_cast ca
+                         WHERE ca.castsource IN (r.oid, r.arr) OR ca.casttarget IN (r.oid, r.arr)
+                        UNION ALL
+                        SELECT o.oprcode::oid FROM pg_catalog.pg_operator o
+                         WHERE o.oprleft IN (r.oid, r.arr) OR o.oprright IN (r.oid, r.arr)
+                        UNION ALL
+                        SELECT ap.amproc::oid FROM pg_catalog.pg_amproc ap
+                         WHERE ap.amproclefttype IN (r.oid, r.arr)
+                            OR ap.amprocrighttype IN (r.oid, r.arr)
+                        UNION ALL
+                        SELECT rg.rngcanonical::oid FROM pg_catalog.pg_range rg
+                         WHERE rg.rngtypid = r.oid
+                        UNION ALL
+                        SELECT rg.rngsubdiff::oid FROM pg_catalog.pg_range rg
+                         WHERE rg.rngtypid = r.oid) hook
+                  JOIN pg_catalog.pg_proc hp ON hp.oid = hook.fn
+                  JOIN pg_catalog.pg_language hl ON hl.oid = hp.prolang
+                  JOIN pg_catalog.pg_namespace hn ON hn.oid = hp.pronamespace
+                 -- Compiled code attached to a type belongs to an extension the owner
+                 -- of the database installed; it cannot be read, and its volatility
+                 -- label is rarely set. What is followed is code written in the database.
+                 WHERE hn.nspname <> 'pg_catalog'
+                   AND hl.lanname NOT IN ('c', 'internal')) hooks
+         CROSS JOIN LATERAL (
+                SELECT string_agg(pg_catalog.pg_get_expr(con.conbin, 0), ' , ') AS source
+                  FROM pg_catalog.pg_constraint con
+                 WHERE con.contypid = r.oid AND con.conbin IS NOT NULL) checks
+      ) coded
+     WHERE coded.names IS NOT NULL OR coded.source IS NOT NULL),
   'operators', (
     SELECT coalesce(json_agg(json_build_object(
-             'op', o.oprname, 'fn', p.proname, 'vol', p.provolatile)), '[]'::json)
+             'op', o.oprname, 'fn', p.proname, 'schema', pn.nspname,
+             'vol', p.provolatile, 'lang', l.lanname)), '[]'::json)
       FROM pg_catalog.pg_operator o
       JOIN pg_catalog.pg_namespace n ON n.oid = o.oprnamespace
       JOIN pg_catalog.pg_proc p ON p.oid = o.oprcode
-     WHERE n.nspname <> 'pg_catalog')
+      JOIN pg_catalog.pg_namespace pn ON pn.oid = p.pronamespace
+      JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+      LEFT JOIN LATERAL (
+            SELECT bool_or(ic.oid IS NOT NULL) AS castable
+              FROM pg_catalog.pg_type ot
+              JOIN pg_catalog.pg_namespace otn ON otn.oid = ot.typnamespace
+              LEFT JOIN pg_catalog.pg_cast ic
+                     ON ic.casttarget = ot.oid AND ic.castcontext = 'i'
+             WHERE ot.oid IN (o.oprleft, o.oprright)
+               AND otn.nspname NOT IN ('pg_catalog', 'information_schema')) own ON true
+     WHERE n.nspname <> 'pg_catalog'
+       -- Matched by their text: operators over built-in types only. One over a
+       -- user-defined type applies where a value of that type exists and is found
+       -- through the type (above). The exception is a type that an implicit cast can
+       -- produce out of something else: then the text is all there is to go by, and
+       -- only code written in the database is followed (compiled code attached to a
+       -- type is the extension's own).
+       AND (own.castable IS NULL
+            OR (own.castable AND l.lanname NOT IN ('c', 'internal'))))
 ) AS probe
 """.replace("{max_source}", str(_MAX_SOURCE_CHARS))
 
@@ -147,6 +250,7 @@ class Vetting:
 
     relations: dict[int, dict[str, Any]] = field(default_factory=dict)  # by oid
     functions: dict[int, dict[str, Any]] = field(default_factory=dict)  # by oid
+    types: dict[int, dict[str, Any]] = field(default_factory=dict)  # by oid
     rounds: int = 0
 
     def relation_names(self) -> set[str]:
@@ -220,6 +324,13 @@ async def vet_statement(db: Db, analysis: Analysis, *, read_only: bool) -> Vetti
     checked_calls: set[str] = set()
     checked_names: set[str] = set()
     contexts: dict[str, str] = {}  # name -> where it was found, for messages
+    operator_texts = set(analysis.operators)
+    operator_catalog: list[dict[str, Any]] = []
+    judged_operators: set[tuple[str, str]] = set()
+    # Functions written out as calls: the types in their signatures are followed (an
+    # argument of a domain type runs its CHECK). Functions reached as the code behind an
+    # operator or a cast are judged and read, but their signatures lead nowhere new.
+    written_calls = set(calls)
 
     for round_number in range(1, _MAX_ROUNDS + 1):
         vetting.rounds = round_number
@@ -227,17 +338,37 @@ async def vet_statement(db: Db, analysis: Analysis, *, read_only: bool) -> Vetti
         ask_names = sorted(names - checked_names)
         if not ask_functions and not ask_names:
             return vetting
-        probe = await db.value(_PROBE_SQL, [ask_functions, ask_names])
+        probe = await db.value(
+            _PROBE_SQL, [ask_functions, ask_names, sorted(written_calls & set(ask_functions))]
+        )
         checked_calls |= set(ask_functions)
         checked_names |= set(ask_names)
 
         new_calls: set[str] = set()
         new_names: set[str] = set()
         if round_number == 1:
-            # A custom operator is a function call in disguise: judge the function too.
-            for function_name in _check_operators_and_types(probe, analysis, permissive):
-                contexts.setdefault(function_name, "an operator used by the statement")
-                new_calls.add(function_name)
+            operator_catalog = probe["operators"]
+            if probe["volatile_types"] and not permissive:
+                raise Rejected(
+                    "the type "
+                    + ", ".join(sorted(probe["volatile_types"]))
+                    + " converts values through a VOLATILE function",
+                    rule="type-volatile",
+                )
+
+        def note(
+            label: str,
+            found: tuple[set[str], set[str], set[str]],
+            into_calls: set[str] = new_calls,
+            into_names: set[str] = new_names,
+        ) -> None:
+            found_calls, found_names, found_operators = found
+            for item in found_calls | found_names:
+                contexts.setdefault(item, label)
+            written_calls.update(found_calls)
+            into_calls.update(found_calls)
+            into_names.update(found_names)
+            operator_texts.update(found_operators)
 
         for function in probe["functions"]:
             oid = function["oid"]
@@ -258,13 +389,15 @@ async def vet_statement(db: Db, analysis: Analysis, *, read_only: bool) -> Vetti
             body = _body_to_scan(function, profile, read_only=read_only, where=where)
             if body is not None:
                 label = f"function {function['schema']}.{name}()"
-                found_calls, found_names = _scan_text(
-                    body, where=label, read_only=read_only, profile=profile
+                note(
+                    label,
+                    _scan_text(
+                        body,
+                        where=label,
+                        read_only=read_only,
+                        dynamic_sql_in=function if function["lang"] == "plpgsql" else None,
+                    ),
                 )
-                for item in found_calls | found_names:
-                    contexts.setdefault(item, label)
-                new_calls |= found_calls
-                new_names |= found_names
 
         for relation in probe["relations"]:
             oid = relation["oid"]
@@ -281,15 +414,36 @@ async def vet_statement(db: Db, analysis: Analysis, *, read_only: bool) -> Vetti
                 )
             label = f"view {relation['schema']}.{relation['name']}"
             for text in (relation.get("def"), relation.get("policies")):
-                if not text:
-                    continue
-                found_calls, found_names = _scan_text(
-                    text, where=label, read_only=read_only, profile=profile
+                if text:
+                    note(label, _scan_text(text, where=label, read_only=read_only))
+
+        # Code attached to a type runs without being named: the function behind a cast,
+        # an operator or an operator class, and the CHECK of a domain (also when a value
+        # merely becomes an argument of that type).
+        for kind in probe["types"]:
+            oid = kind["oid"]
+            if oid in vetting.types:
+                continue
+            vetting.types[oid] = kind
+            qualified = f"{kind['schema']}.{kind['name']}"
+            for hook in kind.get("functions") or ():
+                contexts.setdefault(hook, f"a cast or operator of type {qualified}")
+                new_calls.add(hook)
+            if kind.get("checks"):
+                label = f"the CHECK of domain {qualified}"
+                found_calls, _no_relations, found_operators = _scan_text(
+                    kind["checks"], where=label, read_only=read_only
                 )
-                for item in found_calls | found_names:
-                    contexts.setdefault(item, label)
-                new_calls |= found_calls
-                new_names |= found_names
+                # A CHECK cannot hold a subquery, so its names are not relations.
+                note(label, (found_calls, set(), found_operators))
+
+        # A custom operator is a function call in disguise, wherever it was written:
+        # in the statement, in a view, in a function body, in a CHECK.
+        for function_name in _operator_functions(
+            operator_catalog, operator_texts, judged_operators, profile, read_only=read_only
+        ):
+            contexts.setdefault(function_name, "a custom operator")
+            new_calls.add(function_name)
 
         calls |= new_calls
         names |= new_names
@@ -313,7 +467,8 @@ def _refuse_by_name(name: str, *, read_only: bool, where: str) -> None:
             f"{name}() is not allowed{_in(where)}: it can act outside the database or change "
             "the session, even inside a read-only transaction",
             rule="function-denied",
-            hint="pgharbor has dedicated tools for server information; see pg_server_info.",
+            hint="pgharbor has dedicated tools for what the server knows: pg_activity and "
+            "pg_locks for sessions, pg_settings, pg_sizes, pg_server_info.",
         )
     if read_only and is_denied_when_read_only(name):
         raise Rejected(
@@ -394,9 +549,21 @@ def _body_to_scan(
 
 
 def _scan_text(
-    text: str, *, where: str, read_only: bool, profile: ConnectionConfig
-) -> tuple[set[str], set[str]]:
-    """Scan a view definition, policy expression or function body for what it can reach."""
+    text: str,
+    *,
+    where: str,
+    read_only: bool,
+    dynamic_sql_in: dict[str, Any] | None = None,
+) -> tuple[set[str], set[str], set[str]]:
+    """Scan a view definition, policy expression, CHECK or function body for what it can
+    reach: the names in call position, every name, and the operators it uses.
+
+    ``dynamic_sql_in`` is the PL/pgSQL function whose body this is. Such a body can build
+    a statement at run time (``EXECUTE``), and then nothing read here says what it will
+    reach: not the tables, not the columns, not the functions. No pattern over its
+    strings can tell either, since the text may be glued from pieces or come in an
+    argument. So it is refused as unverifiable, like a language pgharbor cannot read.
+    """
     try:
         tokens = tokenize(text)
     except LexError as exc:
@@ -417,35 +584,54 @@ def _scan_text(
                     f"{where} builds SQL that calls {hit.group(1)}()",
                     rule="function-denied",
                 )
-    return calls, names
+    if dynamic_sql_in is not None and any(token.is_word("execute") for token in tokens):
+        qualified = f"{dynamic_sql_in['schema']}.{dynamic_sql_in['name']}"
+        raise Rejected(
+            f"{where} builds SQL at run time (EXECUTE), so pgharbor cannot tell what it "
+            "reads or calls",
+            rule="function-unverifiable",
+            hint=f'If everything it can run is safe, add "{qualified}" to allow_functions '
+            "in the connection profile.",
+        )
+    return calls, names, {token.text for token in tokens if token.kind is Kind.OP}
 
 
-def _check_operators_and_types(
-    probe: dict[str, Any], analysis: Analysis, permissive: bool
+def _operator_functions(
+    catalog: list[dict[str, Any]],
+    used: set[str],
+    judged: set[tuple[str, str]],
+    profile: ConnectionConfig,
+    *,
+    read_only: bool,
 ) -> set[str]:
-    """Refuse volatile custom operators and casts; return the functions behind the
-    custom operators the statement may be using, to be judged like direct calls.
+    """Judge the custom operators that the texts seen so far may be using; return the
+    functions behind them that still have to be read (those written in the database).
 
-    Operators are matched by text: an operator defined by an extension under a common
-    name (``=``, ``&&``) is considered used whenever that text appears. That costs one
-    more catalog lookup and can only make the check stricter.
+    Operators are matched by text: one defined under a common name (``=``, ``&&``) is
+    considered used whenever that text appears. That can only make the check stricter.
+    ``judged`` remembers what earlier rounds already handled.
     """
-    functions: set[str] = set()
-    for operator in probe["operators"]:
-        if not any(operator["op"] in used for used in analysis.operators):
+    permissive = profile.function_policy is FunctionPolicy.PERMISSIVE
+    to_read: set[str] = set()
+    for operator in catalog:
+        key = (operator["op"], operator["fn"])
+        if key in judged or not any(operator["op"] in text for text in used):
             continue
+        judged.add(key)
         if operator["vol"] == "v" and not permissive:
             raise Rejected(
                 f"the operator {operator['op']} is implemented by the VOLATILE function "
                 f"{operator['fn']}()",
                 rule="operator-volatile",
             )
-        functions.add(operator["fn"])
-    if probe["volatile_types"] and not permissive:
-        raise Rejected(
-            "the type "
-            + ", ".join(sorted(probe["volatile_types"]))
-            + " converts values through a VOLATILE function",
-            rule="type-volatile",
-        )
-    return functions
+        if operator["lang"] in ("c", "internal"):
+            # Nothing to read: the catalog row already says all there is to judge.
+            _judge_function(
+                {"schema": operator["schema"], "name": operator["fn"], "vol": operator["vol"]},
+                profile,
+                read_only=read_only,
+                where=f"the operator {operator['op']}",
+            )
+        else:
+            to_read.add(operator["fn"])
+    return to_read

@@ -19,7 +19,7 @@ async def test_list_schemas(app: Any) -> None:
     assert "pg_catalog" not in by_name
     assert by_name["shop"]["comment"] == "Online shop: customers, products and orders"
     assert by_name["shop"]["tables"] >= 7
-    assert by_name["shop"]["views"] == 2
+    assert by_name["shop"]["views"] == 3
     assert by_name["analytics"]["materialized_views"] == 1
     assert by_name["shop"]["functions"] >= 5
     assert by_name["shop"]["size"]
@@ -53,7 +53,7 @@ async def test_list_tables_filters_and_orders(app: Any, ready: Server) -> None:
     views = rows_as_dicts(
         await call(pg_list_tables, connection="ro", schema="shop", kinds=["view"])
     )
-    assert {v["name"] for v in views} == {"order_summary", "customers_public"}
+    assert {v["name"] for v in views} == {"order_summary", "customers_public", "parity_view"}
 
     events = rows_as_dicts(await call(pg_list_tables, connection="ro", schema="events"))
     if ready.at_least(10):

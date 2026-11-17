@@ -32,6 +32,8 @@ class Rejected(PgHarborError):
         self.hint = hint
         message = f"Refused ({rule}): {reason}"
         if hint:
+            if not reason.endswith((".", "!", "?")):
+                message += "."
             message += f" Hint: {hint}"
         super().__init__(message)
 

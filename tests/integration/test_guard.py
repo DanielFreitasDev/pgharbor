@@ -53,6 +53,14 @@ ALLOWED = [
     "SELECT trap.honest_stable(1)",
     "SELECT shop.sum_qty(qty) FROM shop.order_items WHERE order_id = 1",
     "SELECT 4 OPERATOR(shop.~~~) 6 AS same_parity",
+    # user-defined types whose attached code is honest: enum, domain, composite, cast
+    "SELECT shop.label_of(1)",
+    "SELECT 'a@b.c'::shop.email",
+    "SELECT email FROM shop.customers WHERE email <> 'nobody@example.com' ORDER BY id LIMIT 2",
+    "SELECT (12.5::shop.money_tag).currency",
+    "SELECT 'AB-12'::shop.sku_code",
+    "SELECT id, even FROM shop.parity_view ORDER BY id LIMIT 2",
+    "SELECT status::text, 'paid'::shop.order_status FROM shop.orders LIMIT 1",
     "SELECT attrs->>'color' AS color, tags[1] FROM shop.products WHERE attrs @> '{\"size\": 3}' LIMIT 3",
     "SELECT jsonb_agg(sku ORDER BY sku) FROM (SELECT sku FROM shop.products LIMIT 3) s",
     "SELECT (address).city, count(*) FROM shop.customers GROUP BY 1 ORDER BY 2 DESC LIMIT 3",
@@ -219,6 +227,33 @@ REFUSED: list[tuple[str, str | None]] = [
     ("SELECT 1 OPERATOR(trap.===) 2", "function-denied"),
     ("SELECT trap.sneaky_sum(qty) FROM shop.order_items WHERE order_id = 1", "function-denied"),
     ("SELECT trap.sneaky_sum(1)", "function-denied"),
+    # --- SQL built at run time inside a function: it cannot be verified
+    ("SELECT trap.count_rows('shop.orders')", "function-unverifiable"),
+    ("SELECT trap.count_rows('vault.files')", "function-unverifiable"),
+    ("SELECT trap.glued_key(1)", "function-unverifiable"),
+    ("SELECT trap.glued_lock()", "function-unverifiable"),
+    (
+        "SELECT * FROM trap.run_sql('SELECT access_key FROM vault.files LIMIT 1')",
+        "function-unverifiable",
+    ),
+    ("SELECT * FROM trap.run_sql('SELECT pg_read_file(''PG_VERSION'')')", "function-unverifiable"),
+    ("SELECT trap.loops_over_sql('SELECT 1 FROM vault.files')", "function-unverifiable"),
+    ("SELECT trap.wraps_dynamic()", "function-unverifiable"),
+    # --- code attached to a type: cast, domain CHECK, operator
+    ("SELECT 1::trap.sticky", "function-denied"),
+    ("SELECT CAST(1 AS trap.sticky)", "function-denied"),
+    ("SELECT (1::trap.sticky).v", "function-denied"),
+    ("SELECT 1::trap.checked", "function-denied"),
+    ("SELECT ARRAY[1, 2]::trap.checked[]", "function-denied"),
+    ("SELECT trap.takes_checked(1)", "function-denied"),
+    ("SELECT ROW(1)::trap.holder", "function-denied"),
+    # --- a custom operator written inside a view, a function body or a CHECK
+    ("SELECT * FROM trap.view_with_operator", "function-denied"),
+    ("SELECT trap.uses_operator()", "function-denied"),
+    ("SELECT trap.uses_operator_plpgsql()", "function-denied"),
+    ("SELECT 3::trap.checked_by_operator", "function-denied"),
+    ("SELECT id FROM trap.tagged_rows WHERE t = ROW(1)::trap.tagged", "function-denied"),
+    ("SELECT a.id FROM trap.tagged_rows a JOIN trap.tagged_rows b ON a.t = b.t", "function-denied"),
     # --- credentials and raw statistics
     ("SELECT rolname, rolpassword FROM pg_authid", "relation-denied"),
     ("SELECT * FROM pg_catalog.pg_authid", "relation-denied"),
@@ -308,6 +343,46 @@ async def test_permissive_policy_still_refuses_the_dangerous_ones(sessions: Sess
         await query(sessions, "SELECT pg_sleep(0)", connection="permissive")
 
 
+async def test_a_function_that_builds_sql_runs_only_when_released_by_name(ready: Any) -> None:
+    """EXECUTE hides what a function reaches, so it is refused; the owner of the
+    configuration may vouch for one function, and that covers only that function."""
+    from pgharbor.config import Config
+
+    from ..conftest import profile
+
+    released = Sessions(
+        Config.model_validate(
+            {
+                "connections": {
+                    "ro": profile(ready, "ro", allow_functions=["trap.count_rows"]),
+                    "permissive": profile(ready, "permissive", function_policy="permissive"),
+                },
+                "audit": {"enabled": False},
+            }
+        )
+    )
+    try:
+        counted = await query(released, "SELECT trap.count_rows('shop.no_pk')")
+        assert counted.rows[0][0] >= 1
+        for still_refused in ("SELECT trap.glued_lock()", "SELECT * FROM trap.run_sql('SELECT 1')"):
+            with pytest.raises(Rejected) as caught:
+                await query(released, still_refused)
+            assert caught.value.rule == "function-unverifiable", still_refused
+        # "permissive" trusts what exists in the database, dynamic SQL included.
+        assert (
+            await query(released, "SELECT trap.count_rows('shop.no_pk')", connection="permissive")
+        ).rows
+    finally:
+        await released.close()
+
+
+async def test_strict_policy_refuses_code_attached_to_types(sessions: Sessions) -> None:
+    with pytest.raises(Rejected) as caught:
+        await query(sessions, "SELECT (12.5::shop.money_tag).currency", connection="strict")
+    assert caught.value.rule == "function-not-allowed"
+    assert "shop.to_money_tag" in str(caught.value)
+
+
 # ------------------------------------------------------------------- protected tables
 
 GUARDED_OK = [
@@ -341,6 +416,14 @@ GUARDED_REFUSED = [
     ("SELECT id FROM vault.files WHERE size_bytes > 10 LIMIT 1", "full-scan-forbidden"),
     ("SELECT id FROM vault.files ORDER BY id LIMIT 3", "full-scan-forbidden"),
     ("SELECT trap.reads_vault()", "protected-table-indirect"),
+    ("SELECT (1::trap.wrapped).v", "protected-table-indirect"),
+    ("SELECT (CAST(1 AS trap.wrapped)).v", "protected-table-indirect"),
+    ("SELECT trap.glued_key(1)", "function-unverifiable"),
+    ("SELECT trap.count_rows('vault.files')", "function-unverifiable"),
+    (
+        "SELECT * FROM trap.run_sql('SELECT access_key FROM vault.files LIMIT 1')",
+        "function-unverifiable",
+    ),
     ("SELECT most_common_vals FROM pg_stats WHERE tablename = 'files'", "relation-denied"),
 ]
 
