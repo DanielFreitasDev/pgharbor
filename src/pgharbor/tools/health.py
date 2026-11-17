@@ -1680,6 +1680,9 @@ _CHECKS: tuple[tuple[str, Callable[[Db], Awaitable[dict[str, Any]]], str], ...] 
 )
 
 
+_CHECK_BUDGET_MS = 10_000
+
+
 @tool(group="health", title="Health check")
 async def pg_health_check(connection: str | None = None) -> dict[str, Any]:
     """Run a quick DBA check-up and return findings ranked by severity: connection use, long
@@ -1694,10 +1697,22 @@ async def pg_health_check(connection: str | None = None) -> dict[str, Any]:
     goes deeper. A check that cannot run on this server version or with this role is reported
     as `not_available` and the others still run. It only reads statistics and catalogs.
     """
-    async with get_app().read(connection) as db:
+    app = get_app()
+    # A check-up must stay quick on a struggling server: each check gets a short budget,
+    # and after two of them run out of time the rest are skipped instead of queued up.
+    budget = min(app.profile(connection).statement_timeout, _CHECK_BUDGET_MS)
+    async with app.read(connection, timeout_ms=budget) as db:
         findings: list[dict[str, Any]] = []
+        timeouts = 0
         for name, check, see in _CHECKS:
-            found, reason = await attempt(db, partial(check, db))
+            found: dict[str, Any] | None
+            reason: str | None
+            if timeouts >= 2:
+                found, reason = None, "skipped, because two earlier checks ran out of time"
+            else:
+                found, reason = await attempt(db, partial(check, db))
+                if found is None and reason and "time limit" in reason:
+                    timeouts += 1
             if found is None:
                 found = _finding(
                     name,

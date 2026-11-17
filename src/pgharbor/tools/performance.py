@@ -27,6 +27,7 @@ from ._util import (
     resolve_relation,
     split_qualified,
 )
+from ._util import attempt as attempt_part
 
 __all__ = [
     "pg_activity",
@@ -1582,6 +1583,7 @@ async def pg_sizes(
     """
     check_choice("scope", scope, ("databases", "schemas", "tables", "indexes", "tablespaces"))
     limit = clamp(limit, 30, 500)
+    size_notes: list[str] = []
     async with get_app().read(connection) as db:
         if scope == "databases":
             rows = await db.rows(
@@ -1674,16 +1676,30 @@ async def pg_sizes(
         else:
             rows = await db.rows(
                 """
-                SELECT t.spcname AS tablespace, pg_catalog.pg_get_userbyid(t.spcowner) AS owner,
-                       pg_catalog.pg_size_pretty(s.bytes) AS size,
+                SELECT t.oid::int8 AS oid, t.spcname AS tablespace,
+                       pg_catalog.pg_get_userbyid(t.spcowner) AS owner,
                        nullif(pg_catalog.pg_tablespace_location(t.oid), '') AS location
                   FROM pg_catalog.pg_tablespace t
-                 CROSS JOIN LATERAL (SELECT pg_catalog.pg_tablespace_size(t.oid) AS bytes) s
-                 ORDER BY s.bytes DESC, t.spcname
+                 ORDER BY t.spcname
                  LIMIT $1
                 """,
                 [limit + 1],
             )
+            # One tablespace at a time: a role may measure some and not others (it needs
+            # CREATE on the tablespace or pg_read_all_stats), and each measurement walks
+            # every file, so a failure or a refusal must not cost the whole answer.
+            for row in rows:
+                measured = await attempt_part(
+                    db,
+                    size_notes,
+                    f"size of tablespace {row['tablespace']}",
+                    "SELECT pg_catalog.pg_tablespace_size($1::oid) AS bytes, "
+                    "pg_catalog.pg_size_pretty(pg_catalog.pg_tablespace_size($1::oid)) AS size",
+                    [row.pop("oid")],
+                )
+                row["bytes"] = measured[0]["bytes"] if measured else None
+                row["size"] = measured[0]["size"] if measured else None
+            rows.sort(key=lambda r: (-(r["bytes"] or -1), r["tablespace"]))
             columns = ["tablespace", "owner", "size", "location"]
         rows, has_more = page(rows, limit)
         database_size = await db.value(
@@ -1702,6 +1718,8 @@ async def pg_sizes(
             "Partitioned parents hold no data: their partitions are listed individually. "
             "total = data + indexes + toast (+ small free-space and visibility maps)."
         ]
+    if size_notes:
+        out["notes"] = [*out.get("notes", []), *size_notes]
     return out
 
 

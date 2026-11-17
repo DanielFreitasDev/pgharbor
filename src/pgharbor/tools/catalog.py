@@ -498,11 +498,12 @@ def _sql_language(v: int, _pattern: bool) -> str:
 
 
 def _sql_tablespace(v: int, _pattern: bool) -> str:
+    # No size here: measuring a tablespace walks every file in it, which takes longer
+    # than the statement timeout on a large server. pg_sizes(scope="tablespaces") does it.
     return """
         SELECT NULL::text AS schema, t.spcname AS name,
                pg_catalog.pg_get_userbyid(t.spcowner) AS owner,
                NULLIF(pg_catalog.pg_tablespace_location(t.oid), '') AS location,
-               pg_catalog.pg_size_pretty(pg_catalog.pg_tablespace_size(t.oid)) AS size,
                t.spcoptions AS options
           FROM pg_catalog.pg_tablespace t WHERE true"""
 
@@ -753,7 +754,7 @@ _LIST_KINDS: dict[str, _ListSpec] = {
         optional=("handler", "comment"),
     ),
     "tablespace": _ListSpec(
-        ("name", "owner", "location", "size", "options"),
+        ("name", "owner", "location", "options"),
         _sql_tablespace,
         scoped=False,
         order="q.name",

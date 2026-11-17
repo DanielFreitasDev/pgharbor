@@ -21,10 +21,11 @@ async def pg_list_schemas(
     connection: str | None = None, include_system: bool = False
 ) -> dict[str, Any]:
     """List the schemas (namespaces) of the database with owner, comment, how many tables,
-    views, sequences and functions each holds, and total size.
+    views, sequences and functions each holds, and approximate size.
 
     The first step when exploring a database. System schemas (pg_catalog,
-    information_schema) are left out unless `include_system` is true.
+    information_schema) are left out unless `include_system` is true. Sizes come from the
+    planner statistics, so they are instant and slightly behind; pg_sizes measures.
     """
     app = get_app()
     async with app.read(connection) as db:
@@ -39,8 +40,13 @@ async def pg_list_schemas(
                    count(c.oid) FILTER (WHERE c.relkind = 'f') AS foreign_tables,
                    (SELECT count(*) FROM pg_catalog.pg_proc p WHERE p.pronamespace = n.oid)
                        AS functions,
-                   coalesce(sum(pg_catalog.pg_total_relation_size(c.oid))
-                            FILTER (WHERE c.relkind IN ('r', 'm')), 0)::bigint AS bytes,
+                   -- Pages known to the planner (tables, indexes and their TOAST): instant,
+                   -- where measuring every file takes seconds on a large database.
+                   (coalesce(sum(c.relpages::bigint + coalesce((
+                        SELECT t.relpages FROM pg_catalog.pg_class t
+                         WHERE t.oid = c.reltoastrelid), 0))
+                             FILTER (WHERE c.relkind IN ('r', 'm', 'i')), 0)
+                    * current_setting('block_size')::bigint)::bigint AS bytes,
                    pg_catalog.obj_description(n.oid, 'pg_namespace') AS comment
               FROM pg_catalog.pg_namespace n
               LEFT JOIN pg_catalog.pg_class c ON c.relnamespace = n.oid
