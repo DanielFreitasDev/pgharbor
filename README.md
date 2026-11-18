@@ -71,6 +71,7 @@ For more than one database, or for any of the rules below, write a configuration
 ```bash
 uvx --from git+https://github.com/DanielFreitasDev/pgharbor pgharbor init    # writes ~/.config/pgharbor/config.toml
 uvx --from git+https://github.com/DanielFreitasDev/pgharbor pgharbor check   # validates it and tests the connections (production only when named)
+uvx --from git+https://github.com/DanielFreitasDev/pgharbor pgharbor ui      # or do all of it in the browser: the management panel
 ```
 
 **2. Add it to your agent.**
@@ -331,6 +332,75 @@ note = "Filter by id or customer_id."
 Also there: function policies, credential redaction, limits, audit log, and **custom
 tools**, which turn a query you approve into a tool of its own so that production needs no
 free SQL at all. Everything is in [docs/configuration.md](docs/configuration.md).
+
+## Management panel
+
+Run `pgharbor ui` and a local page opens where you see everything pgharbor is doing and
+change everything it can be told. It is a separate program: the MCP server never starts
+it and never opens a port.
+
+<p align="center">
+  <img src="assets/panel-dark.png#gh-dark-mode-only" alt="The overview of the management panel: calls, refusals, failures, sessions and calls over time" width="100%">
+  <img src="assets/panel-light.png#gh-light-mode-only" alt="The overview of the management panel: calls, refusals, failures, sessions and calls over time" width="100%">
+</p>
+
+| You want to | Where |
+|---|---|
+| See what the agents are doing: calls, refusals and failures over time, by tool, connection and rule | **Overview** |
+| Read every call, filter and search it, open the statement that ran | **Audit** |
+| Know who is connected: client, project folder, approvals, and who still runs an older configuration | **Sessions** |
+| Create, edit, rename, test and delete connections, with every setting explained | **Connections**, **Defaults** |
+| Switch tools on and off, and write custom tools | **Tools** |
+| Go back to any earlier version of the file | **File** |
+| Stop all database access right now | **Pause**, on every screen |
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/panel-connection.png" alt="Every setting explained, with where its value comes from"></td>
+    <td width="50%"><img src="assets/panel-audit.png" alt="Every call, live, filtered and searched"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Every setting explained, with where its value comes from</sub></td>
+    <td align="center"><sub>Every call, live, filtered and searched</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/panel-sessions.png" alt="Who is connected, from which project, and what was approved"></td>
+    <td width="50%"><img src="assets/panel-tools.png" alt="Tools switched on and off, and custom tools"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Who is connected, from which project, and what was approved</sub></td>
+    <td align="center"><sub>Tools switched on and off, and custom tools</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="assets/panel-phone.png" alt="The same panel on a phone" width="260"><br>
+  <sub>The same panel on a phone</sub>
+</p>
+
+Every setting shows where its value comes from (this connection, `[defaults]` or
+pgharbor's default). Nothing is written until you review it: the page shows the difference
+in the file and **every point where the change would let an agent do more**, and such a
+change cannot be saved without saying so.
+
+<p align="center">
+  <img src="assets/panel-review.png" alt="The review before saving: the change raises the access of production, and says so" width="80%">
+</p>
+
+The panel is built not to be the weak point:
+
+- it listens on `127.0.0.1` only, and stops by itself when no tab is showing it;
+- it opens only with a key that is new on every start, printed in your terminal and never
+  stored in a cookie;
+- requests from other sites, and from foreign names pointed at your machine (DNS
+  rebinding), are refused before anything else runs;
+- every save is judged by the server's own validator, backed up and written to the audit
+  log, and no password is ever sent to the browser;
+- `--read-only` gives a panel that can only watch.
+
+English, Brazilian Portuguese and Spanish; light and dark themes; phone to wide screen.
+The details, and what the panel does *not* protect against, are in
+[docs/ui.md](docs/ui.md) and [docs/security.md](docs/security.md#the-management-panel).
 
 ## Where it sits
 

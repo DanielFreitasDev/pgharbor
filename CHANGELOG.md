@@ -4,6 +4,32 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Management panel: `pgharbor ui` opens a local web page (English, Brazilian Portuguese
+  and Spanish; light and dark themes) that shows calls, refusals, failures and sessions,
+  searches the audit log, and edits everything in the configuration file. A change is
+  validated by the server's own loader, reviewed as a difference, flagged when it reduces
+  the protection, backed up and logged. See [docs/ui.md](docs/ui.md).
+- Emergency pause: the owner can stop database access at once, for every connection or
+  for some, in every running session. A paused call is refused with the rule `paused`.
+- Session files: each running server records which client started it, from which folder,
+  with which configuration and which connections were approved, so the owner can see who
+  is using pgharbor.
+- Audit entries carry a `session` identifier that ties a call to a session.
+- `pgharbor ui --read-only`, `--port`, `--idle-timeout` and `--no-open`.
+- The architecture picture now shows the panel, and the README has screenshots of it.
+
+### Changed
+
+- New runtime dependency `tomlkit` (used only by the panel, to edit the configuration file
+  without losing comments); `starlette` and `uvicorn`, already installed with the MCP SDK,
+  are now declared. The MCP server itself loads none of the panel's code.
+- The server instructions tell agents that the configuration file and the panel belong to
+  the user.
+
 ## [0.1.0] - 2026-11-17
 
 First public release.

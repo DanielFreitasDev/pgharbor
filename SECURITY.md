@@ -31,6 +31,10 @@ in the changelog, unless you prefer otherwise.
   audit log.
 - Bypassing the approval of a protected connection or the confirmation of a write.
 - A difference between pgharbor's SQL scanner and PostgreSQL's that hides a function call.
+- In the management panel (`pgharbor ui`): reading or changing anything without its key
+  or from another site, a route that returns a credential, a change that reduces the
+  protection and is saved without the owner's acknowledgement, or hostile text from the
+  audit log running as code in the page.
 
 The design and its known limits are described in [docs/security.md](docs/security.md).
 Something listed there under "Known limits" is not a vulnerability, but ideas to narrow

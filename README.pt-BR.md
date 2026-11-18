@@ -72,6 +72,7 @@ configuração:
 ```bash
 uvx --from git+https://github.com/DanielFreitasDev/pgharbor pgharbor init    # cria ~/.config/pgharbor/config.toml
 uvx --from git+https://github.com/DanielFreitasDev/pgharbor pgharbor check   # valida o arquivo e testa as conexões (produção só quando citada)
+uvx --from git+https://github.com/DanielFreitasDev/pgharbor pgharbor ui      # ou faça tudo isso no navegador: o painel de gerenciamento
 ```
 
 **2. Adicione ao seu agente.**
@@ -355,6 +356,75 @@ uma ferramenta com nome, e assim produção pode dispensar SQL livre. Tudo em
 | `function_policy` | `strict` só aceita funções embutidas seguras; `standard` também aceita funções suas marcadas IMMUTABLE/STABLE, depois de inspecionar o código; `permissive` só recusa as perigosas |
 | `redact_columns` | colunas com nome de credencial (senha, token, segredo) voltam como `[redacted]` |
 | `statement_timeout`, `max_rows`, `max_cell_chars` | tempo máximo, linhas e tamanho de cada valor |
+
+## Painel de gerenciamento
+
+Rode `pgharbor ui` e abre-se uma página local em que você vê tudo o que o pgharbor está
+fazendo e altera tudo o que pode ser dito a ele. É um programa separado: o servidor MCP
+nunca o inicia e nunca abre uma porta.
+
+<p align="center">
+  <img src="assets/panel-dark.pt-BR.png#gh-dark-mode-only" alt="A visão geral do painel de gerenciamento: chamadas, recusas, falhas, sessões e chamadas ao longo do tempo" width="100%">
+  <img src="assets/panel-light.pt-BR.png#gh-light-mode-only" alt="A visão geral do painel de gerenciamento: chamadas, recusas, falhas, sessões e chamadas ao longo do tempo" width="100%">
+</p>
+
+| Você quer | Onde |
+|---|---|
+| Ver o que os agentes estão fazendo: chamadas, recusas e falhas ao longo do tempo, por ferramenta, conexão e regra | **Visão geral** |
+| Ler cada chamada, filtrar, buscar e abrir a instrução SQL que rodou | **Auditoria** |
+| Saber quem está conectado: cliente, pasta do projeto, aprovações e quem ainda roda com a configuração antiga | **Sessões** |
+| Criar, editar, renomear, testar e excluir conexões, com cada configuração explicada | **Conexões**, **Padrões** |
+| Ligar e desligar ferramentas e escrever ferramentas personalizadas | **Ferramentas** |
+| Voltar a qualquer versão anterior do arquivo | **Arquivo** |
+| Cortar agora todo o acesso aos bancos | **Pausar**, em todas as telas |
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/panel-connection.png" alt="Cada configuração explicada, com a origem do valor"></td>
+    <td width="50%"><img src="assets/panel-audit.png" alt="Cada chamada, ao vivo, com filtros e busca"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Cada configuração explicada, com a origem do valor</sub></td>
+    <td align="center"><sub>Cada chamada, ao vivo, com filtros e busca</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/panel-sessions.png" alt="Quem está conectado, de qual projeto, e o que foi aprovado"></td>
+    <td width="50%"><img src="assets/panel-tools.png" alt="Ferramentas ligadas e desligadas, e ferramentas personalizadas"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Quem está conectado, de qual projeto, e o que foi aprovado</sub></td>
+    <td align="center"><sub>Ferramentas ligadas e desligadas, e ferramentas personalizadas</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="assets/panel-phone.png" alt="O mesmo painel no celular" width="260"><br>
+  <sub>O mesmo painel no celular</sub>
+</p>
+
+Cada configuração mostra de onde vem o valor (desta conexão, de `[defaults]` ou do padrão
+do pgharbor). Nada é gravado antes da sua revisão: a página mostra a diferença no arquivo
+e **cada ponto em que a alteração deixaria o agente fazer mais**, e uma alteração assim
+não pode ser salva sem você dizer que leu.
+
+<p align="center">
+  <img src="assets/panel-review.png" alt="A revisão antes de salvar: a alteração aumenta o acesso da produção, e isso é avisado" width="80%">
+</p>
+
+O painel foi feito para não ser o ponto fraco:
+
+- escuta só em `127.0.0.1` e encerra sozinho quando nenhuma aba o está mostrando;
+- só abre com uma chave nova a cada início, impressa no seu terminal e nunca guardada em
+  cookie;
+- requisições de outros sites, e de nomes estrangeiros apontados para a sua máquina (DNS
+  rebinding), são recusadas antes de qualquer outra coisa;
+- todo salvamento é julgado pelo validador do próprio servidor, ganha uma cópia de
+  segurança e vai para o log de auditoria, e nenhuma senha é enviada ao navegador;
+- `--read-only` dá um painel que só observa.
+
+Em inglês, português do Brasil e espanhol; temas claro e escuro; do celular ao monitor
+grande. Os detalhes, e aquilo de que o painel *não* protege, estão em
+[docs/ui.md](docs/ui.md) e [docs/security.md](docs/security.md#the-management-panel).
 
 ## Onde ele fica
 

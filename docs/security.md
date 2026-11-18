@@ -17,6 +17,7 @@ statement *is* are enforced by the PostgreSQL server itself, not by pattern matc
 - [The write path](#the-write-path)
 - [Session hygiene](#session-hygiene)
 - [Prompt injection](#prompt-injection)
+- [The management panel](#the-management-panel)
 - [Known limits](#known-limits)
 - [Hardening checklist](#hardening-checklist)
 - [How this is tested](#how-this-is-tested)
@@ -364,6 +365,83 @@ for writes and for production. Keep in mind the "lethal trifecta": private data,
 untrusted content and a way to send data out. pgharbor provides the first, any database
 may contain the second; be careful about which other tools the same agent has.
 
+## The management panel
+
+`pgharbor ui` is a local web page for the owner: it shows the audit log and the sessions
+and it edits the configuration file ([docs/ui.md](ui.md)). Whoever can use it can decide
+which databases an agent reaches, so it gets a safety model of its own.
+
+**It is a different program from the MCP server.** The server that agents talk to never
+starts the panel, never imports its code and never opens a port. The panel runs only
+while a person runs the command, on `127.0.0.1`, and stops by itself when no tab is
+showing it. A test fails if the server process ever loads the panel's modules.
+
+**Every request is judged before any of the panel's code runs**, in this order:
+
+| Check | What it stops |
+|---|---|
+| The `Host` header must be exactly `127.0.0.1:PORT` or `localhost:PORT` | DNS rebinding: a foreign name made to resolve to `127.0.0.1` |
+| `Sec-Fetch-Site`, when the browser sends it, must be `same-origin` (`none` is accepted for the page itself, never for the API) | Requests started by another site |
+| `Origin`, when present, must be the panel's own | The same, for browsers and requests without fetch metadata |
+| Only `GET`, `HEAD` and `POST` exist; no CORS header is ever sent | Preflighted requests from other origins |
+| The API needs `Authorization: Bearer KEY` | Everything that does not hold the key |
+| A `POST` must be `application/json` and under 1 MB | Forms, which a page can send without permission |
+
+The comparisons are equalities, never patterns: validating an origin with a pattern is how
+this kind of check has been bypassed elsewhere.
+
+**The key is 256 random bits, new on every start.** It is printed in the terminal inside
+the address, in the fragment (`#token=`), which a browser never sends to a server and
+never puts in a `Referer`. The page moves it to the tab's `sessionStorage` and removes it
+from the address bar and the history at once.
+
+**The key is never on a command line.** Command lines can be read by every user of a
+machine, so the browser is not started with the address: the key is written to a page
+only the owner can read (mode `600`, in the state directory), the browser is given the
+path of that page, and the page is deleted a few seconds later.
+
+**It is never in a cookie.** Cookies are shared by every port of `127.0.0.1`: a cookie
+would be sent to any other local server the browser talks to, and another local server
+could overwrite it. `sessionStorage` is separate for each port. And because the key
+travels in a header that a foreign page cannot make the browser send, a cross-site request
+arrives without it: there is nothing for a forged request to ride on.
+
+**The page cannot be made to run foreign code.** Its security policy allows only its own
+files: no inline script or style, nothing from another origin, no framing. The page builds
+everything with text nodes and attributes and never parses a string as HTML, so a
+statement written by an agent in the audit log is shown as text. A test fails if a script
+of the page ever uses `innerHTML` or the like.
+
+**A change cannot weaken the protection unnoticed.** The server compares the validated
+configuration before and after every save and refuses the save, whatever the page sends,
+when the new one protects less and the request does not acknowledge it. Every save is
+validated by the server's own loader, leaves a backup and is written to the audit log.
+
+That comparison asks what is *in force*, not what is written. The first rule that matches
+a protected table wins, so a broad or empty rule placed before another is reported as the
+loss it is; a connection that reappears under another name is compared with what it was;
+a new connection, a different server, user or role, a different import or export folder,
+a time limit set to zero and an audit log sent elsewhere all need the owner's yes. What
+the comparison cannot decide (rules whose patterns overlap in other ways) is shown rather
+than assumed harmless.
+
+**Credentials go in, never out.** No route returns a password, a connection string or the
+value of an environment variable; texts and differences are masked on the server, by the
+structure of the file and wherever a credential sits in it. The value of a key the panel
+does not know is not shown either: a mistyped `pasword` holds a password all the same.
+Of a file that is not valid TOML only the skeleton is shown (table headers and key
+names), because a value may span lines or hide in an inline table.
+
+The emergency pause is the panel's only way to reach running sessions, and it is one-way
+by construction: a file that servers read before every database access and that can only
+make them refuse. A pause file that cannot be understood pauses everything.
+
+What the panel does not change: **a program running as the owner can edit the
+configuration file directly**, panel or no panel. The server instructions tell agents that
+the file and the panel belong to the user and must not be touched; that is a request, not
+a boundary. The boundary is the database role, and a client that asks before it runs
+commands.
+
 ## Known limits
 
 - **Existing database objects are trusted as far as their source can be read.** Views,
@@ -388,8 +466,12 @@ may contain the second; be careful about which other tools the same agent has.
 - **Availability.** `statement_timeout` bounds time, not memory. A query can still use
   `work_mem` per plan node and write temporary files until the limit. Set
   `temp_file_limit` and a `CONNECTION LIMIT` on the role.
-- **HTTP transports** are not offered; pgharbor speaks stdio only, so there is no network
-  listener to protect.
+- **HTTP transports** are not offered; the MCP server speaks stdio only, so it has no
+  network listener to protect. The management panel is a separate, optional program with
+  a listener on `127.0.0.1`; see [The management panel](#the-management-panel).
+- **The configuration file is as safe as the account that owns it.** Anything running as
+  that user can rewrite it. Keep it at mode `600`, and prefer clients that ask before an
+  agent runs a command or edits a file outside the project.
 
 ## Hardening checklist
 
@@ -426,5 +508,11 @@ may contain the second; be careful about which other tools the same agent has.
   supported versions.
 - `tests/integration/test_admin.py` checks access modes and the confirmation dialog on
   both MCP protocol generations.
+- `tests/unit/test_panel_gate.py` sends the panel what a hostile page, a rebound name,
+  another site and a keyless program could send, and checks that each is refused;
+  `tests/unit/test_panel_api.py` checks that no route returns a credential, that nothing
+  is written unless the validator accepts it, and that a weakening change needs an
+  explicit yes; `tests/integration/test_panel.py` checks, on every version, that the
+  pause stops a real query.
 
 Found a way through? See [SECURITY.md](../SECURITY.md).

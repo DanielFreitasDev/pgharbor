@@ -27,6 +27,10 @@ First match wins:
 `pgharbor check` validates the file and tries the connections (see
 [Command line](#command-line)).
 
+Everything on this page can also be edited in a browser: `pgharbor ui` opens the
+[management panel](ui.md), which shows every setting with an explanation, validates and
+reviews each change, and keeps a backup of the file on every save.
+
 A file in the current directory is never picked up by itself: opening a repository must
 not be able to hand the agent a new set of database rules.
 
@@ -169,13 +173,21 @@ log_params = false
 ```
 
 One JSON line per tool call: time (`ts`), `tool`, `connection` (by name, also when the
-default one was used), `outcome`, the `rule` that refused it, the `sql` text (for a custom
-tool, its configured statement), duration (`ms`) and a `detail` message on errors. Result
-rows are never logged. Bound parameters, and the arguments of custom tools, are logged
+default one was used), `session` (which server process wrote the line), `outcome`, the
+`rule` that refused it, the `sql` text (for a custom tool, its configured statement),
+duration (`ms`) and a `detail` message on errors. Result rows are never logged. What the
+owner does in the [management panel](ui.md) is logged too, as `panel.config`,
+`panel.pause` and `panel.test`, with `session` set to `panel`. Bound parameters, and the arguments of custom tools, are logged
 only with `log_params = true`. The file is created with mode `600`.
 
 Without `path`, the log goes to `$XDG_STATE_HOME/pgharbor/audit.jsonl`
 (`~/.local/state/pgharbor/` by default; `%LOCALAPPDATA%\pgharbor\` on Windows).
+
+While `enabled` is true, each running server also keeps a small file under `sessions/` in
+that same directory, refreshed every 15 seconds and named by its `session` identifier:
+the client that started it, its folder, the configuration it loaded and the connections
+the user approved. The panel uses those files to show who is connected; they are removed
+two weeks after a session ends. `enabled = false` stops both the log and these files.
 
 ## Turning tools off
 
@@ -235,6 +247,7 @@ pgharbor [--config FILE] [serve]              run the MCP server on stdio (the d
 pgharbor [--config FILE] check [NAME ...]     validate the file and test connections
 pgharbor [--config FILE] check --all          ... including those that need approval
 pgharbor [--config FILE] tools                list the tools this configuration exposes
+pgharbor [--config FILE] ui                   open the management panel in the browser
 pgharbor init [--force]                       write a starter file (--force overwrites)
 pgharbor config-path                          print the default file path
 pgharbor --version
@@ -244,6 +257,11 @@ pgharbor --version
 connected as, or the reason it could not. Connections that need approval (production) are
 **skipped** unless you name them (`pgharbor check prod`) or pass `--all`, so that a
 routine check never opens production. `--config` may come before or after the subcommand.
+
+`ui` starts the [management panel](ui.md) on `127.0.0.1` and prints its address, which
+carries a key that is new on every start. Options: `--port PORT` (default 7432; 0 picks a
+free one), `--read-only` (monitor only), `--idle-timeout MINUTES` (default 30; 0 never
+stops) and `--no-open` (do not open the browser).
 
 ## Complete example
 

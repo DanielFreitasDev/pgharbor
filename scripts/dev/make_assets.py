@@ -274,7 +274,7 @@ def _wrap(text: str, width: int) -> list[str]:
 
 
 def architecture(theme: Theme) -> Path:
-    svg = Svg(1200, 430, theme, "How pgharbor sits between the agent and the databases")
+    svg = Svg(1200, 622, theme, "How pgharbor sits between the agent and the databases")
     svg.text(48, 62, "Where pgharbor sits", size=28, weight=700)
     svg.text(48, 94, "One local process, started by your MCP client. It listens on stdio only: "
              "there is no network port.", size=17, fill=theme.muted)  # fmt: skip
@@ -325,7 +325,50 @@ def architecture(theme: Theme) -> Path:
         svg.rect(990, y + 44, round(len(mode) * 7.4 + 18), 22, fill=fill, rx=11,
                  stroke=color if fill == theme.card else "none")  # fmt: skip
         svg.text(999, y + 60, mode, size=13, fill=color, weight=600)
+    _panel_row(svg, theme, top + height)
     return svg.save("architecture")
+
+
+def _panel_row(svg: Svg, theme: Theme, above: float) -> None:
+    """The owner's side: the management panel, a separate program that meets the server
+    only through three files."""
+    files = ("config.toml", "audit log · sessions", "pause")
+    widths = [round(len(label) * 15 * 0.57 + 26) for label in files]
+    gap = 18
+    x = 344 + (476 - sum(widths) - gap * (len(files) - 1)) / 2
+    chips_y, box_y = above + 30, above + 96
+    for label, width in zip(files, widths, strict=True):
+        middle = x + width / 2
+        svg.line(middle, above + 4, middle, chips_y - 4, stroke=theme.faint, dash="2 6")
+        svg.chip(x, chips_y, label, fill=theme.code_bg, color=theme.muted)
+        svg.line(middle, chips_y + 35, middle, box_y - 4, stroke=theme.faint, dash="2 6")
+        x += width + gap
+    # the owner
+    svg.rect(48, box_y, 210, 98, fill=theme.card, stroke=theme.card_border, rx=16)
+    svg.text(70, box_y + 40, "You", size=21, weight=700)
+    svg.text(70, box_y + 68, "in your browser", size=16, fill=theme.muted)
+    svg.arrow(268, box_y + 40, 334, stroke=theme.faint)
+    svg.arrow(334, box_y + 64, 268, stroke=theme.faint)
+    svg.text(301, box_y + 26, "key", size=14, fill=theme.faint, weight=700, anchor="middle")
+    svg.text(301, box_y + 88, "127.0.0.1", size=13, fill=theme.faint, anchor="middle")
+    # the panel
+    svg.rect(344, box_y, 476, 98, fill=theme.card, stroke=theme.card_border, rx=16)
+    svg.mark(368, box_y + 22, 40)
+    svg.text(420, box_y + 42, "Management panel", size=21, weight=800)
+    svg.text(420, box_y + 66, "pgharbor ui: a separate program, started by you", size=14,
+             fill=theme.muted)  # fmt: skip
+    svg.text(420, box_y + 85, "and only while you want it", size=14, fill=theme.muted)
+    # what it is for
+    svg.rect(916, box_y, 236, 98, fill=theme.card, stroke=theme.card_border, rx=14)
+    notes = (
+        ("See", "calls, sessions, refusals"),
+        ("Change", "connections, rules, tools"),
+        ("Stop", "all access, at once"),
+    )
+    for i, (verb, what) in enumerate(notes):
+        y = box_y + 30 + i * 26
+        svg.text(934, y, verb, size=13, weight=700)
+        svg.text(990, y, what, size=12, fill=theme.muted)
 
 
 def _cylinder(svg: Svg, x: float, y: float, color: str) -> None:

@@ -45,6 +45,8 @@ uv run python scripts/dev/gen_docs.py     # regenerates docs/tools.md and the RE
 | `src/pgharbor/session.py` | connections, transactions, session reset |
 | `src/pgharbor/app.py`, `server.py` | tool registry and MCP server |
 | `src/pgharbor/tools/` | the tools, one module per area |
+| `src/pgharbor/presence.py`, `pause.py` | session files and the emergency pause |
+| `src/pgharbor/ui/` | the management panel: request gate, configuration editor, risk rules, and the page under `static/` |
 | `tests/fixture.py` | the sample database used by integration tests |
 | `scripts/dev/catalog.py` | look up catalogs, functions and settings across versions |
 
@@ -61,6 +63,24 @@ Changes to `lexer.py`, `guard.py`, `vetting.py`, `functions.py`, `runner.py` or
 `session.py` need a test that fails without the change. If you found a statement that
 should be refused and is not, add it to `REFUSED` in `tests/integration/test_guard.py`
 first. Security reports go through [SECURITY.md](SECURITY.md), not public issues.
+
+## Changing the management panel
+
+The panel (`pgharbor ui`, [docs/ui.md](docs/ui.md)) can change which databases an agent
+reaches, so its rules are as firm as the ones of the safety layers:
+
+- a request that must not work goes into `tests/unit/test_panel_gate.py` first;
+- no route returns a credential, and nothing is written unless `load_config` accepts the
+  very file that will be kept;
+- a new configuration key gets a place in `ui/fields.py`, a label and a help text in the
+  three dictionaries under `ui/static/i18n/` and, when it can let an agent do more, a
+  finding in `ui/risks.py`;
+- the page has no build step: plain ES modules, checked with `node --check`. It builds
+  everything with `h()` (never `innerHTML`), loads nothing from another origin, and uses
+  the project's own components instead of native browser widgets.
+
+After a change to the page, open it in a browser at a phone width and a desktop width, in
+both themes: `uv run pgharbor ui --config /tmp/some/config.toml`.
 
 ## Commit messages
 
