@@ -4,6 +4,7 @@ pgharbor                 run the MCP server on stdio (what an MCP client launche
 pgharbor init            write a starter configuration file
 pgharbor check           validate the configuration and try every connection
 pgharbor tools           list the tools this configuration exposes
+pgharbor ui              open the management panel, a local web page for the owner
 pgharbor config-path     print where the configuration file is expected
 """
 
@@ -100,6 +101,38 @@ def main(argv: list[str] | None = None) -> int:
         help="also test connections that need approval, such as production",
     )
     sub.add_parser("tools", parents=[common], help="list the tools this configuration exposes")
+    from .ui import DEFAULT_PORT
+
+    ui = sub.add_parser(
+        "ui",
+        parents=[common],
+        help="open the management panel (a local web page for the owner)",
+        description="Start the management panel on 127.0.0.1 and print its address, which "
+        "carries a one-time key. The panel shows who is using pgharbor and what was run, "
+        "and edits the configuration file. It runs only while this command runs.",
+    )
+    ui.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        metavar="PORT",
+        help=f"port on 127.0.0.1 (default {DEFAULT_PORT}; 0 picks any free port)",
+    )
+    ui.add_argument(
+        "--read-only",
+        action="store_true",
+        help="monitor only: the panel cannot change the configuration or pause access",
+    )
+    ui.add_argument(
+        "--idle-timeout",
+        type=float,
+        default=30,
+        metavar="MINUTES",
+        help="stop by itself after this long without use (default 30; 0 never stops)",
+    )
+    ui.add_argument(
+        "--no-open", action="store_true", help="do not open the browser, only print the address"
+    )
     sub.add_parser("config-path", help="print the default configuration file path")
     args = parser.parse_args(argv)
     _use_selector_loop_on_windows()
@@ -115,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_check(args.connections, args.all))
         if args.command == "tools":
             return _tools()
+        if args.command == "ui":
+            return _ui(args)
         if args.command == "config-path":
             print(default_config_path())
             return 0
@@ -212,6 +247,25 @@ async def _check(names: list[str], everything: bool) -> int:
     finally:
         await sessions.close()
     return 1 if failures else 0
+
+
+def _ui(args: argparse.Namespace) -> int:
+    # Imported here: the MCP server never loads the panel or its web dependencies.
+    from .ui.server import serve
+
+    if not 0 <= args.port <= 65535:
+        raise PgHarborError("--port must be between 0 and 65535")
+    try:
+        return asyncio.run(
+            serve(
+                port=args.port,
+                open_browser=not args.no_open,
+                read_only=args.read_only,
+                idle_minutes=args.idle_timeout,
+            )
+        )
+    except KeyboardInterrupt:
+        return 0
 
 
 def _tools() -> int:

@@ -25,7 +25,7 @@ def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedPr
 def test_version_and_help() -> None:
     assert run("--version").stdout.startswith("pgharbor ")
     help_text = run("--help").stdout
-    for command in ("serve", "init", "check", "tools", "config-path"):
+    for command in ("serve", "init", "check", "tools", "ui", "config-path"):
         assert command in help_text
 
 

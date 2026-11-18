@@ -82,6 +82,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S311", "B011", "E501"]
+# These tests look at the files the panel wrote, between two requests: reading them
+# synchronously is the point.
+"tests/unit/test_panel_api.py" = ["ASYNC240", "ASYNC251"]
+"tests/integration/test_panel.py" = ["ASYNC240"]
 "scripts/dev/make_assets.py" = ["E501", "RUF028"]
 
 [tool.mypy]

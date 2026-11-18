@@ -1,0 +1,484 @@
+/*
+ * Design tokens and the base layer.
+ *
+ * Every color is written once with light-dark(): the browser picks the side from
+ * `color-scheme`, which follows the system unless the owner chose a theme (the
+ * `data-theme` attribute, set before first paint by js/theme-init.js).
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces: page plane, cards, and two steps for insets and hovers. */
+  --bg: light-dark(#f3f6fa, #0a111e);
+  --surface: light-dark(#ffffff, #0f1a2b);
+  --surface-2: light-dark(#f6f9fc, #131f33);
+  --surface-3: light-dark(#eaf0f7, #1a2942);
+  --overlay: light-dark(rgb(12 22 38 / 0.45), rgb(2 6 14 / 0.7));
+
+  /* Lines. */
+  --border: light-dark(#dce4ee, #22304a);
+  --border-strong: light-dark(#bcc9db, #34496c);
+
+  /* Ink: primary, secondary, muted. All pass 4.5:1 on --surface. */
+  --text: light-dark(#0c1626, #e6edf7);
+  --text-2: light-dark(#3f4f66, #b1bfd3);
+  --text-3: light-dark(#5a6b82, #8fa1ba);
+
+  /* Brand: the teal-to-blue of the pgharbor mark. */
+  --accent: light-dark(#0b7a70, #2dd4bf);
+  --accent-hover: light-dark(#086259, #5eead4);
+  --accent-soft: light-dark(#def4f0, #0f3b3a);
+  --on-accent: light-dark(#ffffff, #05121c);
+  --brand-a: #2dd4bf;
+  --brand-b: #6ea8e0;
+  --link: light-dark(#1b5ba3, #7fb4ea);
+
+  /* States. Text tones pass 4.5:1 on their soft background and on --surface. */
+  --ok: light-dark(#0e6b38, #4ade80);
+  --ok-soft: light-dark(#e2f5e9, #0f2f22);
+  --warn: light-dark(#8a5200, #f5b83d);
+  --warn-soft: light-dark(#fff2d1, #38290a);
+  --danger: light-dark(#b42318, #fb8a8a);
+  --danger-soft: light-dark(#fde7e5, #3d1a1c);
+  --danger-solid: light-dark(#c62d21, #e5484d);
+  --info: light-dark(#1b5ba3, #7fb4ea);
+  --info-soft: light-dark(#e3eefb, #16304f);
+
+  /* Chart series, validated as a set for color-vision deficiency in both modes:
+     succeeded, refused, other, failed (stacked in this order). */
+  --series-ok: light-dark(#2a78d6, #3987e5);
+  --series-refused: light-dark(#eda100, #c98500);
+  --series-other: light-dark(#6250d6, #9085e9);
+  --series-error: light-dark(#e34948, #e66767);
+  --chart-grid: light-dark(#e6ecf3, #1d2b44);
+  --scroll-thumb: light-dark(#c2cddc, #2f4264);
+  --scroll-thumb-hover: light-dark(#9fafc4, #45608d);
+  --chart-axis: light-dark(#bcc9db, #34496c);
+
+  /* Shape and depth. */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px light-dark(rgb(12 22 38 / 0.06), rgb(0 0 0 / 0.4));
+  --shadow-2: 0 8px 24px -6px light-dark(rgb(12 22 38 / 0.16), rgb(0 0 0 / 0.6));
+  --shadow-3: 0 24px 60px -12px light-dark(rgb(12 22 38 / 0.28), rgb(0 0 0 / 0.75));
+  --ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+
+  /* Space: a 4px scale; the fluid ones follow the viewport. */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --gutter: clamp(1rem, 0.5rem + 2vw, 2rem);
+
+  /* Type. System fonts only: nothing is fetched from anywhere. */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-s: 0.8125rem;
+  --text-m: 0.9375rem;
+  --text-l: 1.0625rem;
+  --text-xl: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+  --text-2xl: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+
+  /* Layout. */
+  --sidebar: 15.5rem;
+  --rail: 4.75rem;
+  --topbar: 3.75rem;
+  --bottomnav: 3.75rem;
+  --touch: 2.75rem; /* 44px: the comfortable minimum for a finger */
+  --content: 82rem;
+
+  --speed: 160ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --speed: 0ms;
+  }
+}
+
+/* ------------------------------------------------------------------ reset */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--topbar) + var(--s-4));
+  scroll-padding-bottom: calc(var(--bottomnav) + var(--s-6));
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--text-m);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-wrap: anywhere;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+dd,
+figure,
+pre {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--text-2xl);
+}
+
+h2 {
+  font-size: var(--text-xl);
+}
+
+h3 {
+  font-size: var(--text-l);
+}
+
+h4 {
+  font-size: var(--text-m);
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: var(--link);
+  text-underline-offset: 0.18em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  margin: 0;
+}
+
+button {
+  cursor: pointer;
+}
+
+svg {
+  display: block;
+  flex: none;
+}
+
+img {
+  max-width: 100%;
+}
+
+code,
+kbd,
+pre,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-s);
+  background: var(--surface-3);
+}
+
+kbd {
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-s);
+  background: var(--surface-2);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--radius-s);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------- scrollbars */
+
+/* Every scrolling area gets the panel's own scrollbar: a slim rounded thumb on a
+   transparent track. Engines that draw scrollbars from the ::-webkit-scrollbar parts
+   use those (they allow the rounded shape); the others get the standard properties. */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: var(--radius-pill);
+    background-color: var(--scroll-thumb);
+    background-clip: padding-box;
+    min-height: 2.5rem;
+  }
+
+  ::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--scroll-thumb-hover);
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+  }
+}
+
+/* On a touch screen the scrollbar floats over the content and takes no room; it only
+   gets the panel's color. */
+@media (pointer: coarse) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+}
+
+/* Nothing of the browser's own controls shows through: no spinner on numbers, no
+   built-in reveal or clear buttons, no colored background on remembered values. */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button,
+input::-webkit-search-cancel-button,
+input::-webkit-search-decoration,
+input::-webkit-calendar-picker-indicator,
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  appearance: none;
+}
+
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+input,
+textarea,
+button {
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  caret-color: var(--accent);
+}
+
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  box-shadow: 0 0 0 100rem var(--surface) inset;
+  caret-color: var(--text);
+}
+
+/* -------------------------------------------------------------- utilities */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--s-2);
+  left: var(--s-2);
+  z-index: 100;
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--radius-m);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+.muted {
+  color: var(--text-3);
+}
+
+.secondary {
+  color: var(--text-2);
+}
+
+.small {
+  font-size: var(--text-s);
+}
+
+.tiny {
+  font-size: var(--text-xs);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap, var(--s-4));
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap, var(--s-3));
+  min-width: 0;
+}
+
+.row.nowrap-row {
+  flex-wrap: nowrap;
+}
+
+.spread {
+  justify-content: space-between;
+}
+
+.grow {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.end {
+  margin-inline-start: auto;
+}
+
+.grid {
+  display: grid;
+  gap: var(--gap, var(--s-4));
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--min, 18rem), 100%), 1fr));
+}
+
+.gap-1 {
+  --gap: var(--s-1);
+}
+
+.gap-2 {
+  --gap: var(--s-2);
+}
+
+.gap-3 {
+  --gap: var(--s-3);
+}
+
+.gap-5 {
+  --gap: var(--s-5);
+}
+
+.gap-6 {
+  --gap: var(--s-6);
+}
+
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
+  }
+}
