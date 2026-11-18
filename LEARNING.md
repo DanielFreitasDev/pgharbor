@@ -27,6 +27,7 @@ Leia as entradas relacionadas à tarefa. Os detalhes ficam em `docs/learning/`.
 - [Operador de extensão casa por texto](docs/learning/gotcha-operador-de-extensao-casa-por-texto.md) — com PostGIS ou pgvector, todo `=` arrastava uma cadeia de checagens; só operador sobre tipo embutido casa por texto.
 - [Container não lê o arquivo de configuração privado](docs/learning/gotcha-docker-arquivo-de-configuracao-600.md) — o `config.toml` montado é 600 do usuário do host; rodar com `--user`.
 - [Docstring guarda o recuo antes do Python 3.13](docs/learning/gotcha-docstring-com-recuo-antes-do-python-313.md) — descrição de ferramenta e referência gerada mudavam conforme a versão; usar `inspect.cleandoc` e montar tipos pela estrutura.
+- [`os.open` no Windows abre em modo texto](docs/learning/gotcha-os-open-no-windows-abre-em-modo-texto.md) — sem `O_BINARY`, cada quebra de linha vira CR LF e o arquivo editado pelo painel ficava inválido; gravar byte a byte.
 - [`os.kill(pid, 0)` mata o processo no Windows](docs/learning/gotcha-os-kill-zero-mata-no-windows.md) — a presença das sessões usa batimento em arquivo, nunca sonda de PID.
 - [Abrir o navegador com a chave na URL expõe a chave](docs/learning/gotcha-chave-na-linha-de-comando-do-navegador.md) — a URL vai no argv, legível por qualquer usuário; a chave é entregue por um arquivo privado.
 - [Endereço impresso antes de a porta aceitar conexões](docs/learning/gotcha-endereco-impresso-antes-de-escutar.md) — `bind` sem `listen` dava conexão recusada a quem abria o painel rápido; chamar `listen` antes de anunciar.

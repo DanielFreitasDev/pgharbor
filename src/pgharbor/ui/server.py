@@ -695,7 +695,7 @@ def _handoff_page(gate: Gate) -> Path:
         f'<meta http-equiv="refresh" content="0;url={gate.url}">'
         f'<p><a href="{gate.url}">pgharbor</a></p>\n'
     )
-    fd = os.open(page, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    fd = os.open(page, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
     try:
         os.write(fd, html.encode("utf-8"))
     finally:

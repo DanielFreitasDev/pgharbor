@@ -68,6 +68,9 @@ __all__ = [
 ]
 
 MASK = "********"
+# Files are written byte for byte. Without this flag Windows opens them in text mode and
+# turns every line break into two characters, which corrupts a file that already has them.
+_BINARY = getattr(os, "O_BINARY", 0)
 MAX_BACKUPS = 30
 MAX_TEXT_BYTES = 1_000_000
 
@@ -348,6 +351,10 @@ def apply_ops(text: str, ops: list[dict[str, Any]]) -> str:
     """
     if not isinstance(ops, list) or len(ops) > 500:
         raise DocumentError("invalid-op", "the list of changes is not valid")
+    # A file written on Windows ends its lines with CR LF. It is edited with plain line
+    # breaks and gets its own back at the end, so that it never ends up with both.
+    windows_lines = "\r\n" in text
+    text = text.replace("\r\n", "\n")
     try:
         doc = tomlkit.parse(text)
     except TOMLKitError as exc:
@@ -367,7 +374,8 @@ def apply_ops(text: str, ops: list[dict[str, Any]]) -> str:
             doc = _rename(doc, path, op.get("to"))
         else:
             raise DocumentError("invalid-op", f"unknown change {kind!r}")
-    return _tidy(tomlkit.dumps(doc), doc)
+    edited = _tidy(tomlkit.dumps(doc), doc)
+    return edited.replace("\n", "\r\n") if windows_lines else edited
 
 
 def _checked_path(path: Any) -> list[str]:
@@ -555,6 +563,7 @@ def mask_text(text: str) -> str:
     a value may span lines or hide in an inline table, so only its skeleton is shown
     (table headers and key names), which is what one needs to find a syntax error.
     """
+    text = text.replace("\r\n", "\n")  # shown with plain line breaks, whatever the file uses
     try:
         doc = tomlkit.parse(text)
     except TOMLKitError:
@@ -645,7 +654,7 @@ def _write_temporary(text: str, directory: Path) -> Path:
     try:
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         temporary = directory / f".pgharbor-{secrets.token_hex(6)}.tmp"
-        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | _BINARY, 0o600)
         try:
             os.write(fd, text.encode("utf-8"))
             os.fsync(fd)
@@ -720,7 +729,7 @@ def _keep_backup(target: Path, content: bytes) -> str:
     name = f"{target.stem}-{stamp}-{digest_of(content)[:8]}.toml"
     try:
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd = os.open(directory / name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        fd = os.open(directory / name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | _BINARY, 0o600)
         try:
             os.write(fd, content)
             os.fsync(fd)

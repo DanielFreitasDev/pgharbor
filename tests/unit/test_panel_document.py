@@ -1,5 +1,6 @@
 """Editing the configuration file as text, judging a change, and the page's own files."""
 
+import hashlib
 import json
 import re
 import sys
@@ -265,9 +266,9 @@ def test_a_difference_never_shows_a_credential() -> None:
 
 def test_a_save_is_validated_backed_up_and_private(tmp_path: Path) -> None:
     file = tmp_path / "config.toml"
-    file.write_text(SOURCE, encoding="utf-8")
+    file.write_bytes(SOURCE.encode())
     located = Located(path=file, exists=True, explicit=True)
-    digest = __import__("hashlib").sha256(SOURCE.encode()).hexdigest()
+    digest = hashlib.sha256(file.read_bytes()).hexdigest()
 
     with pytest.raises(DocumentError) as invalid:
         save_text(located, SOURCE + "\n[tools]\ntypo = 1\n", digest)
@@ -289,15 +290,43 @@ def test_a_save_is_validated_backed_up_and_private(tmp_path: Path) -> None:
         assert (tmp_path / "backups").stat().st_mode & 0o777 == 0o700
 
 
+def test_a_file_with_windows_line_breaks_keeps_them_and_is_written_byte_for_byte(
+    tmp_path: Path,
+) -> None:
+    """Edited on Windows, a file ends its lines with CR LF. An edit must not mix the two
+    kinds of line break, and saving must not add a third (a lone CR is not valid TOML)."""
+    windows = SOURCE.replace("\n", "\r\n")
+    edited = apply_ops(
+        windows,
+        [
+            op("set", "connections.dev.max_rows", value=75),
+            op("set", "connections.hml", value={"host": "h"}),
+            op("rename", "connections.prod", to="production"),
+        ],
+    )
+    assert "\n" not in edited.replace("\r\n", "")  # every line break is a CR LF
+    assert "\r" not in edited.replace("\r\n", "")
+    assert tomllib.loads(edited)["connections"]["dev"]["max_rows"] == 75
+    assert "\r" not in mask_text(windows)  # shown with plain line breaks
+
+    file = tmp_path / "config.toml"
+    file.write_bytes(windows.encode())
+    located = Located(path=file, exists=True, explicit=True)
+    saved = save_text(located, edited, hashlib.sha256(windows.encode()).hexdigest())
+    assert file.read_bytes() == edited.encode()
+    assert (tmp_path / "backups" / saved["backup"]).read_bytes() == windows.encode()
+    assert sorted(load_config(file).connections) == ["dev", "hml", "production"]
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="symbolic links need privileges on Windows")
 def test_a_linked_file_is_rewritten_where_it_really_is(tmp_path: Path) -> None:
     real = tmp_path / "dotfiles" / "pgharbor.toml"
     real.parent.mkdir()
-    real.write_text(SOURCE, encoding="utf-8")
+    real.write_bytes(SOURCE.encode())
     link = tmp_path / "config.toml"
     link.symlink_to(real)
     located = Located(path=link, exists=True, explicit=True)
-    digest = __import__("hashlib").sha256(SOURCE.encode()).hexdigest()
+    digest = hashlib.sha256(real.read_bytes()).hexdigest()
     save_text(located, apply_ops(SOURCE, [op("set", "connections.dev.max_rows", value=7)]), digest)
     assert link.is_symlink()  # the link is still a link
     assert load_config(real).connections["dev"].max_rows == 7

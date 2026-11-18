@@ -76,7 +76,9 @@ def write_pause(reason: str = "", connections: tuple[str, ...] = ()) -> Pause:
         {"since": pause.since, "reason": pause.reason, "connections": list(pause.connections)},
         ensure_ascii=False,
     )
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = os.open(
+        temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600
+    )
     try:
         os.write(fd, data.encode("utf-8"))
     finally:

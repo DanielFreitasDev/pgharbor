@@ -134,7 +134,9 @@ class Presence:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             data = json.dumps(self._state, ensure_ascii=False, separators=(",", ":"))
-            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            fd = os.open(
+                temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600
+            )
             try:
                 os.write(fd, data.encode("utf-8"))
             finally:
