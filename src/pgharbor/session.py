@@ -660,6 +660,13 @@ def describe_db_error(exc: BaseException, profile: ConnectionConfig | None = Non
     where = f" on connection '{profile.name}'" if profile else ""
     if isinstance(exc, ConfigError):
         return str(exc)
+    if _is_conninfo_error(exc):
+        # libpq quotes the piece it could not read, and that piece may be a password.
+        return (
+            f"The connection settings{where} could not be read by libpq (a malformed "
+            "connection string or parameter). The text is not repeated here because it "
+            "may hold a password: check `dsn`, `dsn_env` and `params` in the configuration."
+        )
     if isinstance(exc, psycopg.errors.QueryCanceled):
         limit = f" ({profile.statement_timeout} ms)" if profile else ""
         return (
@@ -678,12 +685,33 @@ def describe_db_error(exc: BaseException, profile: ConnectionConfig | None = Non
     if isinstance(exc, psycopg.errors.InsufficientPrivilege):
         return f"Permission denied{where}: {_first_line(exc)}"
     if isinstance(exc, psycopg.OperationalError) and getattr(exc, "sqlstate", None) is None:
-        return f"Could not reach the database{where}: {_first_line(exc)}"
+        reason = _first_line(exc)
+        if "@" in reason:
+            # No host name holds an "@": libpq is quoting a piece of a connection URI
+            # whose password was not percent-encoded, and that piece is the password.
+            return (
+                f"Could not reach the database{where}: the host in its connection string "
+                "could not be resolved. The text is not repeated here because it may hold "
+                "a password; a password with special characters must be percent-encoded "
+                "in a URI."
+            )
+        return f"Could not reach the database{where}: {reason}"
     if isinstance(exc, psycopg.Error):
         state = getattr(exc, "sqlstate", None)
         detail = _diag(exc)
         return f"PostgreSQL error{where}{f' [{state}]' if state else ''}: {detail}"
     return str(exc) or type(exc).__name__
+
+
+def _is_conninfo_error(exc: BaseException) -> bool:
+    """A connection string refused before any server was contacted."""
+    if not isinstance(exc, psycopg.ProgrammingError) or getattr(exc, "sqlstate", None):
+        return False
+    text = str(exc)
+    return any(
+        mark in text
+        for mark in ("connection info string", "connection option", "URI", "percent-encoded")
+    )
 
 
 def _first_line(exc: BaseException) -> str:

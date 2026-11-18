@@ -4,8 +4,10 @@ import json
 import os
 from pathlib import Path
 
+import psycopg
+
 from pgharbor.audit import Audit
-from pgharbor.config import AuditConfig
+from pgharbor.config import AuditConfig, ConnectionConfig
 from pgharbor.plan import summarize_plan
 from pgharbor.render import (
     clip,
@@ -183,3 +185,23 @@ def test_audit_never_raises(tmp_path: Path) -> None:
     audit = Audit(AuditConfig(path=str(blocked / "audit.jsonl")))  # parent is a file
     audit.record(tool="x", connection=None, outcome="ok")
     assert audit.tail() == []
+
+
+def test_a_connection_error_never_repeats_a_piece_of_the_connection_string() -> None:
+    """libpq quotes what it could not read, and what it could not read may be the
+    password: a malformed connection string, or a URI whose password has an "@"."""
+    from pgharbor.session import describe_db_error
+
+    profile = ConnectionConfig(name="prod")
+    unparsed = psycopg.ProgrammingError('missing "=" after "QQSECRETQQ" in connection info string')
+    unknown = psycopg.ProgrammingError('invalid connection option "QQSECRETQQ"')
+    unresolved = psycopg.OperationalError(
+        "failed to resolve host 'ZZSECRETZZ@127.0.0.1': Name or service not known"
+    )
+    for error in (unparsed, unknown, unresolved):
+        message = describe_db_error(error, profile)
+        assert "SECRET" not in message
+        assert "prod" in message
+    # An ordinary reason is still told: it is how a person fixes the connection.
+    refused = psycopg.OperationalError("connection to server failed: Connection refused")
+    assert "Connection refused" in describe_db_error(refused, profile)
