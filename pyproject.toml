@@ -1,6 +1,6 @@
 [project]
 name = "pgharbor"
-version = "0.1.0"
+version = "0.2.0"
 description = "A safe harbor between AI agents and PostgreSQL: a complete MCP server, read-only by default, for PostgreSQL 9.6 to 19."
 readme = "README.md"
 license = "MIT"

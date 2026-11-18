@@ -11,7 +11,7 @@ uvx --from git+https://github.com/DanielFreitasDev/pgharbor pgharbor
 
 `uvx` (part of [uv](https://docs.astral.sh/uv/)) downloads pgharbor into an isolated
 environment the first time and reuses it afterwards. To pin a version, add the tag to the
-URL: `git+https://github.com/DanielFreitasDev/pgharbor@v0.1.0`.
+URL: `git+https://github.com/DanielFreitasDev/pgharbor@v0.2.0`.
 
 Prefer a permanent install? `uv tool install git+https://github.com/DanielFreitasDev/pgharbor`
 (or `pipx install git+https://github.com/DanielFreitasDev/pgharbor`) puts a `pgharbor`

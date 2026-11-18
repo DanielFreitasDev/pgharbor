@@ -132,7 +132,7 @@ args = ["--from", "git+https://github.com/DanielFreitasDev/pgharbor", "pgharbor"
 
 </details>
 
-Pin a release by adding `@v0.1.0` to the Git URL. More in [docs/clients.md](docs/clients.md).
+Pin a release by adding `@v0.2.0` to the Git URL. More in [docs/clients.md](docs/clients.md).
 
 ## How a query is kept safe
 

@@ -133,7 +133,7 @@ args = ["--from", "git+https://github.com/DanielFreitasDev/pgharbor", "pgharbor"
 
 </details>
 
-Para fixar uma versão, acrescente `@v0.1.0` ao endereço do Git. Mais detalhes em
+Para fixar uma versão, acrescente `@v0.2.0` ao endereço do Git. Mais detalhes em
 [docs/clients.md](docs/clients.md).
 
 ## Como uma consulta fica segura
