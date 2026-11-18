@@ -701,6 +701,10 @@ async def test_a_log_that_is_cut_or_replaced_is_read_again(panel: PanelClient, h
     assert [e["tool"] for e in (await panel.get("/api/audit")).json()["entries"]] == ["other"] * 3
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="psycopg needs the selector event loop: the command sets it, the test runner does not",
+)
 async def test_a_connection_test_reports_instead_of_failing(panel: PanelClient, home: Path) -> None:
     unreachable = (await panel.post("/api/connections/dev/test")).json()
     assert unreachable["ok"] is False
@@ -743,6 +747,10 @@ async def test_a_mistyped_secret_or_an_unparsable_file_shows_no_value(
         assert not any(secret in reply.text for secret in SECRETS)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="psycopg needs the selector event loop: the command sets it, the test runner does not",
+)
 async def test_a_connection_string_libpq_cannot_read_is_not_repeated(
     panel: PanelClient, config_file: Path, home: Path
 ) -> None:

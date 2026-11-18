@@ -5,6 +5,7 @@ exercised with exactly what an attacker could send."""
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -160,6 +161,10 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """An isolated installation: one configuration file and an empty state directory."""
     for variable in ("XDG_STATE_HOME", "LOCALAPPDATA", "XDG_CONFIG_HOME", "APPDATA"):
         monkeypatch.setenv(variable, str(tmp_path / "home"))
+    # A machine may have libpq's own variables set (the Windows runners of the CI do):
+    # they would define a connection of their own where the tests expect none.
+    for variable in [name for name in os.environ if name.startswith("PG")] + ["DATABASE_URL"]:
+        monkeypatch.delenv(variable, raising=False)
     file = tmp_path / "etc" / "config.toml"
     file.parent.mkdir()
     file.write_text(CONFIG, encoding="utf-8")
