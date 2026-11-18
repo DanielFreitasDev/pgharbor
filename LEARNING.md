@@ -10,6 +10,8 @@ Leia as entradas relacionadas à tarefa. Os detalhes ficam em `docs/learning/`.
 - [SQL montado em tempo de execução dentro de função](docs/learning/bug-sql-dinamico-em-funcao.md) — `EXECUTE` com texto colado escapava da conferência e do plano; função assim é recusada como não verificável.
 - [Código que roda sem ser citado: tipo, conversão, domínio e operador](docs/learning/bug-codigo-pendurado-em-tipo-e-operador.md) — cast com função, `CHECK` de domínio e operador escrito dentro de view executavam código que ninguém conferia.
 - [Resposta longa chegava como JSON cortado no meio](docs/learning/bug-resposta-cortada-no-meio-do-json.md) — o orçamento de linhas era maior que o teto geral de saída; o teto agora tira linhas inteiras.
+- [Risco de uma mudança comparava a regra escrita, não a que vale](docs/learning/bug-risco-comparava-regra-escrita-e-nao-a-que-vale.md) — uma regra `*.*` antes de outra anulava a proteção sem aviso; o painel compara o que fica em vigor.
+- [Leitor incremental do log não percebia arquivo reescrito](docs/learning/bug-leitor-do-log-nao-via-arquivo-reescrito.md) — reescrever o log no lugar mantinha entradas antigas na tela; o leitor compara também o início do arquivo.
 
 ## Pegadinhas de ambiente, dependências e bibliotecas
 
@@ -25,15 +27,21 @@ Leia as entradas relacionadas à tarefa. Os detalhes ficam em `docs/learning/`.
 - [Operador de extensão casa por texto](docs/learning/gotcha-operador-de-extensao-casa-por-texto.md) — com PostGIS ou pgvector, todo `=` arrastava uma cadeia de checagens; só operador sobre tipo embutido casa por texto.
 - [Container não lê o arquivo de configuração privado](docs/learning/gotcha-docker-arquivo-de-configuracao-600.md) — o `config.toml` montado é 600 do usuário do host; rodar com `--user`.
 - [Docstring guarda o recuo antes do Python 3.13](docs/learning/gotcha-docstring-com-recuo-antes-do-python-313.md) — descrição de ferramenta e referência gerada mudavam conforme a versão; usar `inspect.cleandoc` e montar tipos pela estrutura.
+- [`os.kill(pid, 0)` mata o processo no Windows](docs/learning/gotcha-os-kill-zero-mata-no-windows.md) — a presença das sessões usa batimento em arquivo, nunca sonda de PID.
+- [Abrir o navegador com a chave na URL expõe a chave](docs/learning/gotcha-chave-na-linha-de-comando-do-navegador.md) — a URL vai no argv, legível por qualquer usuário; a chave é entregue por um arquivo privado.
+- [Endereço impresso antes de a porta aceitar conexões](docs/learning/gotcha-endereco-impresso-antes-de-escutar.md) — `bind` sem `listen` dava conexão recusada a quem abria o painel rápido; chamar `listen` antes de anunciar.
 
 ## Decisões de arquitetura
 
 - [Analisador léxico próprio, sem parser de terceiros](docs/learning/decision-lexer-proprio.md) — o `pglast` é GPL e um parser no cliente é outro programa; quem decide o tipo da instrução é o servidor.
 - [Corte de linhas e de valores feito no servidor](docs/learning/decision-corte-no-servidor.md) — a consulta roda embrulhada com `left(coluna::text, N)` e `LIMIT`, para nada grande sair do banco.
+- [Painel de gerenciamento é outro programa](docs/learning/decision-painel-e-outro-programa.md) — `pgharbor ui` roda separado, com chave no cabeçalho e sem cookie; mudanças valem em sessões novas e só a pausa é imediata.
+- [Interface sem componentes nativos do navegador](docs/learning/decision-interface-sem-componentes-nativos.md) — pedido do responsável: lista suspensa, caixa de marcação, dica e barra de rolagem são componentes próprios.
 
 ## Abordagens que NÃO funcionaram
 
 - [Descobrir colunas usadas pela saída dos nós do plano](docs/learning/failed-colunas-pela-saida-do-plano.md) — o planejador lista todas as colunas da tabela em junções; não serve para saber se uma coluna protegida foi usada.
+- [Cores de status como séries do gráfico](docs/learning/failed-cores-de-status-como-series-do-grafico.md) — verde, amarelo e vermelho reprovaram no validador de daltonismo; as séries usam azul, amarelo, violeta e vermelho, nessa ordem.
 
 ## Notas de performance
 

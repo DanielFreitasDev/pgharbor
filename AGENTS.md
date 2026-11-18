@@ -26,6 +26,11 @@ Run from the repository root. `uv` may be provided by mise (`mise x uv@latest --
 - Catalog lookup across versions: `scripts/dev/catalog.py rel|fn|guc <text>`.
 - Run the server by hand: `uv run pgharbor` (stdio); `uv run pgharbor check` tests the
   configured connections.
+- Run the management panel: `uv run pgharbor ui` (verified 2026-11-18). To try it without
+  touching your own installation, point `--config` and `XDG_STATE_HOME` at a scratch
+  directory.
+- Check the page's scripts: `node --check src/pgharbor/ui/static/js/<file>.js`
+  (verified 2026-11-18; there is no build step and no Node dependency).
 
 ## Layout
 
@@ -35,6 +40,12 @@ Run from the repository root. `uv` may be provided by mise (`mise x uv@latest --
 - `session.py`: connections, transaction script, session reset.
 - `app.py`, `server.py`, `approval.py`, `audit.py`: registry, MCP server, dialogs, log.
 - `tools/`: one module per area; `tools/_util.py` holds shared helpers.
+- `presence.py`, `pause.py`: what a running server tells its owner (one file per session)
+  and the one thing the owner tells it at once (the emergency pause).
+- `ui/`: the management panel (`pgharbor ui`), a separate program. `gate.py` judges every
+  request, `document.py` edits the configuration file, `risks.py` says what a change does
+  to the protection, `fields.py` describes the forms, `activity.py` reads the audit log,
+  `server.py` holds the routes; `static/` is the page (plain HTML, CSS and ES modules).
 - `tests/fixture.py`: the sample database; `tests/conftest.py`: the version matrix.
 
 ## Conventions and constraints
@@ -58,6 +69,21 @@ Run from the repository root. `uv` may be provided by mise (`mise x uv@latest --
   `tests/integration/test_guard.py`.
 - Bump `FIXTURE_VERSION` in `tests/fixture.py` when the sample database changes.
 - `pglast` is a test-only dependency (GPL): never import it under `src/`.
+- The MCP server never loads the panel: `ui/` is imported only inside the `ui` command of
+  `cli.py`, and `tests/unit/test_panel_gate.py` fails if that changes. Nothing in `ui/`
+  may be reachable from a tool.
+- No route of the panel returns a credential (`SECRET_KEYS` in `ui/document.py`), and
+  nothing is written unless `load_config` accepts the very file that will be kept.
+- A new configuration key needs a place in `ui/fields.py`, `field.<key>.label` and
+  `.help` in the three dictionaries and, when it can let an agent do more, a finding in
+  `ui/risks.py`. Tests fail on a key that is missing from any of them.
+- The page builds everything with `h()` in `static/js/dom.js`: never `innerHTML`, no inline
+  script or style (the content security policy forbids them; use `style.setProperty`),
+  nothing loaded from another origin. Its texts live in `static/i18n/{en,pt-BR,es}.json`,
+  with the same keys in the three files.
+- Nothing in the page is a native browser widget: dropdowns, checkboxes, switches,
+  tooltips, dialogs and scrollbars are the components of `static/js/ui.js` and
+  `static/css/`. Do not add `<select>`, `title=` tooltips or `type="number"` inputs.
 - Nothing from any private environment (hosts, database names, credentials) goes into
   this repository: it is public.
 - `AGENTS.md` and `CLAUDE.md` are identical copies; edit both.
@@ -70,6 +96,8 @@ Run from the repository root. `uv` may be provided by mise (`mise x uv@latest --
 - Configuration reference: `docs/configuration.md`.
 - Tool contract: `docs/writing-tools.md`.
 - Versions and features: `docs/compatibility.md`.
+- The management panel, for its users: `docs/ui.md`; its safety model:
+  `docs/security.md`, section "The management panel".
 
 ## Learning
 
