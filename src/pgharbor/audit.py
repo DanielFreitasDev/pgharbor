@@ -27,9 +27,11 @@ _MAX_SQL_CHARS = 20_000
 
 
 class Audit:
-    def __init__(self, config: AuditConfig) -> None:
+    def __init__(self, config: AuditConfig, session: str | None = None) -> None:
         self.config = config
         self.path: Path = config.resolved_path()
+        # Which server process wrote the entry: the same id as its file under sessions/.
+        self.session = session
         self._warned = False
 
     def record(
@@ -54,6 +56,8 @@ class Audit:
             "connection": connection,
             "outcome": outcome,
         }
+        if self.session:
+            entry["session"] = self.session
         if rule:
             entry["rule"] = rule
         if sql is not None and self.config.log_sql:

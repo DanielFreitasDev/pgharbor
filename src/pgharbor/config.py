@@ -18,6 +18,7 @@ you just cloned must not be able to hand the agent new database rules.
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import os
 import re
 import stat
@@ -46,6 +47,7 @@ __all__ = [
     "default_config_path",
     "load_config",
     "parse_duration_ms",
+    "state_dir",
 ]
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
@@ -408,7 +410,7 @@ class AuditConfig(_Model):
     def resolved_path(self) -> Path:
         if self.path:
             return Path(self.path).expanduser()
-        return _state_dir() / "audit.jsonl"
+        return state_dir() / "audit.jsonl"
 
 
 class ToolsConfig(_Model):
@@ -456,6 +458,9 @@ class Config(_Model):
     custom_tools: dict[str, CustomTool] = Field(default_factory=dict)
     default_connection: str | None = None
     source: str = "environment"
+    # SHA-256 of the file this configuration was read from: lets the owner see which
+    # running sessions still use an older version of the file.
+    digest: str | None = None
     warnings: tuple[str, ...] = ()
 
     def connection(self, name: str | None) -> ConnectionConfig:
@@ -493,7 +498,8 @@ def _config_dir() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "pgharbor"
 
 
-def _state_dir() -> Path:
+def state_dir() -> Path:
+    """Where pgharbor keeps what it records: the audit log, session files, the pause."""
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
         return Path(base) / "pgharbor"
@@ -520,9 +526,12 @@ def load_config(path: str | os.PathLike[str] | None = None) -> Config:
 
 def _from_file(file: Path) -> Config:
     try:
-        raw = tomllib.loads(file.read_text(encoding="utf-8"))
+        content = file.read_bytes()
+        raw = tomllib.loads(content.decode("utf-8"))
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{file}: invalid TOML: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise ConfigError(f"{file}: not valid UTF-8 ({exc.reason})") from exc
     except OSError as exc:
         raise ConfigError(f"{file}: {exc.strerror}") from exc
 
@@ -574,6 +583,7 @@ def _from_file(file: Path) -> Config:
         },
         "default_connection": raw.get("default_connection"),
         "source": str(file),
+        "digest": hashlib.sha256(content).hexdigest(),
         "warnings": tuple(_file_warnings(file, connections_raw)),
     }
     return _validate(data, origin=str(file))

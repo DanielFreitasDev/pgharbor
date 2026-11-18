@@ -1,11 +1,13 @@
 """Assembling the MCP server: tools, resources, prompts and instructions."""
 
+import asyncio
 import contextlib
 import importlib
 import inspect
 from collections.abc import AsyncIterator
 from typing import Any
 
+from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
@@ -13,6 +15,7 @@ from . import __version__
 from .app import REGISTRY, App, ToolSpec, get_app, set_app, tool
 from .config import Access, Config, CustomTool, load_config
 from .errors import PgHarborError
+from .presence import HEARTBEAT_SECONDS, Presence
 from .runner import run_query
 
 __all__ = ["INSTRUCTIONS", "TOOL_MODULES", "build_server", "enabled_tools", "load_tool_modules"]
@@ -71,6 +74,9 @@ statement, switching connection). Explain the refusal to the user.
 - Do not ask for, print or store passwords and tokens. Values that look like credentials \
 are returned as [redacted] on purpose.
 - Every call is recorded in a local audit log (pg_audit_log).
+- The configuration file and the management panel (`pgharbor ui`) belong to the user. \
+Never edit that file, and never start, open or call the panel: rules are changed by a \
+person, not from a conversation.
 """
 
 
@@ -112,9 +118,16 @@ def build_server(config: Config | None = None) -> MCPServer:
 
     @contextlib.asynccontextmanager
     async def lifespan(_server: MCPServer) -> AsyncIterator[None]:
+        presence = app.presence
+        presence.start()
+        heartbeat = asyncio.create_task(_keep_alive(presence))
         try:
             yield
         finally:
+            heartbeat.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat
+            presence.stop()
             await get_app().close()
 
     server = MCPServer(
@@ -125,6 +138,7 @@ def build_server(config: Config | None = None) -> MCPServer:
         version=__version__,
         website_url="https://github.com/DanielFreitasDev/pgharbor",
         lifespan=lifespan,
+        middleware=[_note_client],
     )
     for spec in enabled_tools(app.config):
         meta: dict[str, Any] = {}
@@ -151,6 +165,30 @@ def build_server(config: Config | None = None) -> MCPServer:
     _register_resources(server)
     _register_prompts(server)
     return server
+
+
+# ------------------------------------------------------------------------------------ presence
+
+
+async def _keep_alive(presence: Presence) -> None:
+    """Refresh the session file while the server runs (see ``presence.py``)."""
+    while True:
+        await asyncio.sleep(HEARTBEAT_SECONDS)
+        presence.beat()
+
+
+async def _note_client(ctx: ServerRequestContext[Any, Any], call_next: CallNext) -> HandlerResult:
+    """Record which client is on the other end, for the owner's list of sessions.
+
+    What a client says about itself is shown, never trusted, and knowing it is never a
+    reason to fail a request: the SDK marks this middleware interface as provisional.
+    """
+    with contextlib.suppress(Exception):
+        info = getattr(getattr(ctx.session, "client_params", None), "client_info", None)
+        get_app().presence.note_client(
+            getattr(info, "name", None), getattr(info, "version", None), ctx.protocol_version
+        )
+    return await call_next(ctx)
 
 
 # -------------------------------------------------------------------------------- custom tools

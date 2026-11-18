@@ -12,11 +12,13 @@ import contextlib
 import functools
 import inspect
 import json
+import secrets
 import sys
 import time
 import traceback
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import psycopg
@@ -25,6 +27,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from .audit import Audit, Stopwatch
 from .config import Access, Approval, Config, ConnectionConfig, load_config
 from .errors import ApprovalRequired, PgHarborError, Rejected
+from .pause import read_pause
+from .presence import Presence
 from .render import scrub, scrub_deep, to_json
 from .session import Db, Sessions, describe_db_error
 
@@ -62,8 +66,12 @@ class App:
     def __init__(self, config: Config) -> None:
         self.config = config
         self.sessions = Sessions(config)
-        self.audit = Audit(config.audit)
+        # One id per server process: it names the session file and marks every audit entry.
+        self.session_id = secrets.token_hex(4)
+        self.audit = Audit(config.audit, session=self.session_id)
+        self.presence = Presence(config, self.session_id)
         self._approved: dict[str, float] = {}
+        self._approved_at: dict[str, datetime] = {}
 
     # -------------------------------------------------------------------- profiles
 
@@ -79,17 +87,49 @@ class App:
         if granted is None:
             return False
         if profile.approval_ttl and (time.monotonic() - granted) * 1000 > profile.approval_ttl:
-            del self._approved[profile.name]
+            self.revoke(profile)
             return False
         return True
 
     def approve(self, profile: ConnectionConfig) -> None:
         self._approved[profile.name] = time.monotonic()
+        self._approved_at[profile.name] = datetime.now(UTC)
+        self._publish_approvals()
 
     def revoke(self, profile: ConnectionConfig) -> None:
         self._approved.pop(profile.name, None)
+        self._approved_at.pop(profile.name, None)
+        self._publish_approvals()
+
+    def _publish_approvals(self) -> None:
+        """Tell the session file which connections the user approved, and until when."""
+        shown: dict[str, dict[str, str | None]] = {}
+        for name, granted in self._approved_at.items():
+            ttl = self.config.connections[name].approval_ttl
+            expires = granted + timedelta(milliseconds=ttl) if ttl else None
+            shown[name] = {
+                "granted": granted.isoformat(timespec="seconds"),
+                "expires": expires.isoformat(timespec="seconds") if expires else None,
+            }
+        self.presence.note_approvals(shown)
+
+    def require_not_paused(self, profile: ConnectionConfig) -> None:
+        """Refuse while the owner's emergency pause covers this connection."""
+        pause = read_pause()
+        if pause is None or not pause.covers(profile.name):
+            return
+        why = f" Reason given: {pause.reason}." if pause.reason else ""
+        raise Rejected(
+            f"the owner of this pgharbor has paused access to connection '{profile.name}'.{why}",
+            rule="paused",
+            hint="Nothing in the conversation can lift it. Tell the user that pgharbor is "
+            "paused and that the pause is ended in the management panel (`pgharbor ui`).",
+        )
 
     def require_approval(self, profile: ConnectionConfig) -> None:
+        # Every path to a database passes here, so this is where the pause is enforced:
+        # before the approval, because a paused connection is not to be asked about.
+        self.require_not_paused(profile)
         if self.is_approved(profile):
             return
         raise ApprovalRequired(
